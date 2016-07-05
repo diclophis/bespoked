@@ -1,0 +1,55 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bespoked-service
+  labels:
+    k8s-app: bespoked
+spec:
+  # The default backend must be of type NodePort.
+  type: NodePort
+  ports:
+  - port: 8888
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    k8s-app: bespoked
+
+---
+apiVersion: v1
+kind: ReplicationController
+metadata:
+  name: bespoked-replication-controller
+  labels:
+    k8s-app: bespoked
+spec:
+  #TODO: make this possible to have more than 1 controller alive simultaneously.
+  replicas: 1
+  selector:
+    k8s-app: bespoked
+  template:
+    metadata:
+      labels:
+        k8s-app: bespoked
+        name: bespoked
+    spec:
+      terminationGracePeriodSeconds: 600
+      containers:
+      - image: #NOTE: this is re-written via manifest.rb
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        name: bespoked-controller
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 50Mi
+        args:
