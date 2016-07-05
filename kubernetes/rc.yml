@@ -35,6 +35,8 @@ spec:
         name: bespoked
     spec:
       terminationGracePeriodSeconds: 600
+      imagePullSecrets:
+        - name: dockercfgjson
       containers:
       - image: #NOTE: this is re-written via manifest.rb
         livenessProbe:
