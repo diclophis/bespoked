@@ -13,9 +13,9 @@ MANIFEST_TMP=$(BUILD)/manifest.yml
 
 #.INTERMEDIATE: $(MANIFEST_TMP)
 
-all: build install
+all: image install
 
-build:
+image:
 	docker build -f Dockerfile.bespoked -t $(IMAGE) .
 	docker push $(IMAGE)
 

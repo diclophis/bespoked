@@ -276,3 +276,20 @@ class Bespoked
 end
 
 Bespoked.new.ingress({"var-lib-k8s" => (ARGV[0] || "/var/lib/k8s-ingress")})
+
+
+=begin
+KUBERNETES_SERVICE_PORT=443
+KUBERNETES_PORT=tcp://10.254.0.1:443
+HOSTNAME=XXXXXXXXXXXXXX
+SHLVL=1
+HOME=/root
+KUBERNETES_PORT_443_TCP_ADDR=10.254.0.1
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+KUBERNETES_PORT_443_TCP_PORT=443
+KUBERNETES_PORT_443_TCP_PROTO=tcp
+KUBERNETES_SERVICE_PORT_HTTPS=443
+KUBERNETES_PORT_443_TCP=tcp://10.254.0.1:443
+PWD=/
+KUBERNETES_SERVICE_HOST=10.254.0.1
+=end
