@@ -1,4 +1,5 @@
 FROM alpine:3.4
+RUN touch /tmp/937f4e5591f43afbe393f24dd0161011cdf0807a
 RUN apk update && apk upgrade && apk add build-base ruby ruby-dev ruby-irb ruby-bundler
 RUN apk update && apk upgrade && apk add nginx
 RUN adduser -D -h /home/bespoked -s /bin/bash bespoked
