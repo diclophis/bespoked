@@ -39,13 +39,13 @@ spec:
         - name: dockercfgjson
       containers:
       - image: #NOTE: this is re-written via manifest.rb
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8081
-            scheme: HTTP
-          initialDelaySeconds: 30
-          timeoutSeconds: 5
+        #livenessProbe:
+        #  httpGet:
+        #    path: /healthz
+        #    port: 8081
+        #    scheme: HTTP
+        #  initialDelaySeconds: 30
+        #  timeoutSeconds: 5
         name: bespoked-controller
         resources:
           limits:
@@ -54,4 +54,4 @@ spec:
           requests:
             cpu: 100m
             memory: 50Mi
-        args:
+        command: ["bundle", "exec", "ruby", "bespoked.rb"]

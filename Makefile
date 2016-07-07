@@ -23,7 +23,7 @@ install: $(MANIFEST_TMP)
 	cat $(MANIFEST_TMP)
 	kubectl apply -f $(MANIFEST_TMP)
 
-$(MANIFEST_TMP): manifest.rb
+$(MANIFEST_TMP): manifest.rb kubernetes/rc.yml
 	ruby manifest.rb $(REGISTRY_DOMAIN) $(IMAGE_NAME) $(IMAGE_TAG) > $(MANIFEST_TMP)
 
 uninstall:
