@@ -1,6 +1,8 @@
 FROM alpine:3.4
 RUN apk update && apk upgrade && apk add build-base ruby ruby-dev ruby-irb
 RUN apk update && apk upgrade && apk add nginx
-ADD bespoked.rb /usr/bin/bespoked.rb
-RUN chmod 500 /usr/bin/bespoked.rb
-CMD ["/usr/bin/bespoked.rb"]
+RUN useradd -d /home/bespoked -m -s /bin/bash bespoked
+ADD . /home/bespoked
+WORKDIR /home/bespoked
+RUN bundle
+CMD ["bundle", "exec" "ruby", "/home/bespoked/bespoked.rb"]

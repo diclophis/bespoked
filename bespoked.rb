@@ -1,34 +1,29 @@
 #!/usr/bin/env ruby
 
+# stdlib
 require 'tempfile'
 require 'yaml'
 require 'open3'
 require 'psych'
 require 'fileutils'
 
+# rubygems
+Bundler.require
+
 # curl -s -v -H "Accept: application/json" http://localhost:8080/api/v1/watch/namespaces/default/services
-# https://tenderlovemaking.com/2010/04/17/event-based-json-and-yaml-parsing.html
 
-IO_CHUNK_SIZE = 1024 * 32
-
-class DocumentStreamHandler < Psych::TreeBuilder
-  def initialize &block
-    super
-    @block = block
-  end
-
-  def end_document implicit_end = !streaming?
-    @last.implicit_end = implicit_end
-    @block.call pop
-  end
-
-  def start_document version, tag_directives, implicit
-    n = Psych::Nodes::Document.new version, tag_directives, implicit
-    push n
-  end
-end
+IO_CHUNK_SIZE = 65554
+IDLE_SPIN = 10.0
 
 class Bespoked
+  def kubectl_get
+    if ENV["CI"] && ENV["CI"] == "true"
+      ["ruby", "-e", "f=File.open(File.join('test/fixtures', ARGV[0] + '.json')); while c = f.getc do STDOUT.write(c) && sleep(0.001) end"]
+    else
+      ["sleep", "9999"]
+    end
+  end
+
   def ingress(options = {})
     var_lib_k8s = options["var-lib-k8s"]
     var_lib_k8s_host_to_app_dir = File.join(var_lib_k8s, "host_to_app") 
@@ -39,8 +34,7 @@ class Bespoked
     FileUtils.mkdir_p(var_lib_k8s_app_to_alias_dir)
     FileUtils.mkdir_p(var_lib_k8s_sites_dir)
 
-    kubectl = ["kubectl", "--cluster=#{options['cluster'] || 'localhost'}"]
-    kubectl_get = kubectl + ["get", "-o", "json", "-w"]
+    puts var_lib_k8s
 
     #NOTE: the folling ingress controller
     #      has the following issues that should be correct
@@ -63,10 +57,16 @@ class Bespoked
 
     waiters = []
 
-    document_handler_switch = Proc.new do |document|
+    document_handler_switch = Proc.new do |event|
       add_to_pending_documents = false
 
-      description = document.to_ruby
+      puts event.inspect
+
+      type = event["type"]
+      description = event["object"]
+
+      if description
+
       kind = description["kind"]
       name = description["metadata"]["name"]
 
@@ -173,17 +173,27 @@ class Bespoked
 
       if add_to_pending_documents
         puts "adding pending"
-        pending_documents << document
+        pending_documents << event
         false
       else
         true
+      end
+
       end
     end
 
     parsers = {}
     stderrs = []
+    parse_maps = {}
 
-    ["pods", "service", "ingress"].each do |kind_to_watch|
+    #watches = ["pods", "services", "ingress"]
+    watches = ["services", "ingress"]
+    #watches = ["services"]
+
+    scan_maps = {}
+    scan_threads = []
+
+    watches.each do |kind_to_watch|
       kubectl_get_command = kubectl_get + [kind_to_watch]
       puts kubectl_get_command.inspect
       _,description_io,stderr,waiter = execute(*kubectl_get_command)
@@ -191,21 +201,23 @@ class Bespoked
       waiters << waiter
       stderrs << stderr
 
-      handler = DocumentStreamHandler.new(&document_handler_switch)
-      parsers[description_io] = Psych::Parser.new(handler)
+      parser = Yajl::Parser.new
+      parser.on_parse_complete = document_handler_switch
+      parsers[description_io] = parser
     end
 
     puts "watching"
 
     while true
+      IO.select(parsers.keys, [], [], IDLE_SPIN)
+
       parsers.each do |description_io, parser|
         begin
-          parser.parse(description_io.read_nonblock(IO_CHUNK_SIZE), "watch.json")
+          chunk = description_io.read_nonblock(IO_CHUNK_SIZE)
+          parser << chunk
         rescue EOFError, Errno::EAGAIN, Errno::EINTR => e
           nil
         end
-
-        sleep 0.1
       end
 
       documents_examined = []
@@ -213,24 +225,40 @@ class Bespoked
       while (pending_documents - documents_examined).length > 0
         document_to_examine = (pending_documents - documents_examined)[0]
         documents_examined << document_to_examine
-        puts "examining pending"
+        #puts "examining pending"
         if document_handler_switch.call(document_to_examine)
-          puts "popping pending"
+          #puts "popping pending"
           pending_documents = (pending_documents - [document_to_examine])
         end
       end
 
-      break unless waiters.all? { |thread| thread.alive? }
+      all_alive = waiters.all? { |thread| thread.alive? }
+      all_dead = waiters.all? { |thread| !thread.alive? }
+
+      all_alive_scan = scan_threads.all? { |thread| thread.alive? }
+
+      all_open = parsers.all? do |description_io, parser|
+        is_closed = description_io.closed?
+        if is_closed
+          parsers.delete(description_io)
+        end
+        !is_closed
+      end
+
+      all_closed = parsers.all? do |description_io, parser|
+        description_io.closed?
+      end
+
+      break if (all_alive_scan && !all_open) || (all_dead && all_closed)
     end
 
-    waiters.each { |waiter| waiter.join }
+    puts "exited main loop..."
 
+    waiters.each { |waiter| waiter.join }
     stderrs.each { |stderr| puts stderr.read }
   end
 
   def execute(*args)
-    nonblock = true
-
     extra_args = {}
     if args[args.length - 1].is_a?(Hash)
       extra_args = args[args.length - 1]
@@ -275,8 +303,7 @@ class Bespoked
   end
 end
 
-Bespoked.new.ingress({"var-lib-k8s" => (ARGV[0] || "/var/lib/k8s-ingress")})
-
+Bespoked.new.ingress({"var-lib-k8s" => (ARGV[0] || Dir.mktmpdir)})
 
 =begin
 KUBERNETES_SERVICE_PORT=443
