@@ -47,8 +47,8 @@ class Bespoked
         puts ["client got", data].inspect
       end
 
-      client.start_read
       client.write('GET /goes-here HTTP/1.1\r\nHost: foo-bar\r\n\r\n')
+      client.start_read
     end
 
     run_loop.run do |logger|
@@ -59,6 +59,8 @@ class Bespoked
           puts "error in logger #{e.inspect}"
         end
       end
+
+      $stderr.write(".")
     end
 
     puts "exiting..."
