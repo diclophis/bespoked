@@ -1,10 +1,24 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    ffi (1.9.13)
+    ffi-compiler (1.0.1)
+      ffi (>= 1.0.0)
+      rake
+    libuv (2.0.8)
+      ffi (>= 1.9)
+      ruby-tls (>= 2.0.0)
+      thread_safe
+    rake (11.2.2)
+    ruby-tls (2.1.2)
+      ffi-compiler (>= 0.0.2)
+      thread_safe
+    thread_safe (0.3.5)
     yajl-ruby (1.2.1)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
+  libuv
   yajl-ruby

@@ -3,8 +3,6 @@
 # stdlib
 require 'tempfile'
 require 'yaml'
-require 'open3'
-require 'psych'
 require 'fileutils'
 
 # rubygems
@@ -36,6 +34,36 @@ class Bespoked
 
     puts var_lib_k8s
 
+    run_loop = Libuv::Loop.default
+
+    client = run_loop.tcp
+
+    run_loop.all(client).catch do |reason|
+      puts ["run_loop caught error", reason].inspect
+    end
+
+    client.connect('127.0.0.1', 34567) do |client|
+      client.progress do |data|
+        puts ["client got", data].inspect
+      end
+
+      client.start_read
+      client.write('GET /goes-here HTTP/1.1\r\nHost: foo-bar\r\n\r\n')
+    end
+
+    run_loop.run do |logger|
+      logger.progress do |level, errorid, error|
+        begin
+          puts "Log called: #{level}: #{errorid}\n#{error.message}\n#{error.backtrace.join("\n") if error.backtrace}\n"
+        rescue Exception => e
+          puts "error in logger #{e.inspect}"
+        end
+      end
+    end
+
+    puts "exiting..."
+
+
     #NOTE: the folling ingress controller
     #      has the following issues that should be correct
     #      1) does not work with multi-master
@@ -44,6 +72,7 @@ class Bespoked
     #      4) is not multi-server capable
     #      5) requires nginx reload, and elevated permissions
 
+=begin
     pod_name = nil
     pod_description = nil
     pod_ip = nil
@@ -196,7 +225,7 @@ class Bespoked
     watches.each do |kind_to_watch|
       kubectl_get_command = kubectl_get + [kind_to_watch]
       puts kubectl_get_command.inspect
-      _,description_io,stderr,waiter = execute(*kubectl_get_command)
+      _,description_io,stderr,waiter = #execute(*kubectl_get_command)
 
       waiters << waiter
       stderrs << stderr
@@ -209,7 +238,7 @@ class Bespoked
     puts "watching"
 
     while true
-      IO.select(parsers.keys, [], [], IDLE_SPIN)
+      #IO.select(parsers.keys, [], [], IDLE_SPIN)
 
       parsers.each do |description_io, parser|
         begin
@@ -256,50 +285,8 @@ class Bespoked
 
     waiters.each { |waiter| waiter.join }
     stderrs.each { |stderr| puts stderr.read }
-  end
+=end
 
-  def execute(*args)
-    extra_args = {}
-    if args[args.length - 1].is_a?(Hash)
-      extra_args = args[args.length - 1]
-    else
-      args << extra_args
-    end
-
-    first_args = {}
-    if args[0].is_a?(Hash)
-      first_args = args[0]
-    else
-      args.unshift first_args
-    end
-
-    extra_args[:unsetenv_others] = false
-    extra_args[:close_others] = false
-
-    first_args['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
-    first_args['RUBYOPT'] = "-d" if ENV['DEBUG']
-
-    [
-      "LANG",
-      "USER",
-      "HOME",
-      "TERM"
-    ].each do |pass_env_key|
-      first_args[pass_env_key] = ENV[pass_env_key]
-    end
-
-    env_component = args.shift
-    opt_component = args.pop
-
-    combined = [env_component, *args, opt_component]
-
-    a,b,c,d = Open3.popen3(*combined)
-    a.sync = true
-    b.sync = true
-    c.sync = true
-    d[:pid] = d.pid
-
-    return [a, b, c, d]
   end
 end
 
