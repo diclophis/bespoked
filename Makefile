@@ -16,7 +16,7 @@ MANIFEST_TMP=$(BUILD)/manifest.yml
 all: image install
 
 image:
-	docker build -f Dockerfile.bespoked -t $(IMAGE) .
+	docker build --rm=false -f Dockerfile.bespoked -t $(IMAGE) .
 	docker push $(IMAGE)
 
 install: $(MANIFEST_TMP)
