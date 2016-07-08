@@ -6,6 +6,5 @@ RUN adduser -D -h /home/bespoked -s /bin/bash bespoked
 RUN apk update && apk upgrade && apk add libffi-dev libuv libuv-dev git python
 ADD . /home/bespoked
 WORKDIR /home/bespoked
-USER bespoked
 RUN bundle
 CMD ["bundle", "exec" "ruby", "/home/bespoked/bespoked.rb"]
