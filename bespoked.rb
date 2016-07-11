@@ -9,6 +9,8 @@ require 'fileutils'
 Bundler.require
 
 # curl -s -v -H "Accept: application/json" http://localhost:8080/api/v1/watch/namespaces/default/services
+# http://localhost:8080/apis/extensions/v1beta1/namespaces/default/ingresses
+# apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=9933
 
 IO_CHUNK_SIZE = 65554
 IDLE_SPIN = 10.0

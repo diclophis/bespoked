@@ -46,6 +46,12 @@ spec:
         #    scheme: HTTP
         #  initialDelaySeconds: 30
         #  timeoutSeconds: 5
+	env:
+        - name: KUBERNETES_API_BEARER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: bespoked-ingress-secret
+              key: api-bearer-token
         name: bespoked-controller
         resources:
           limits:
