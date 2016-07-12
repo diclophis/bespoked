@@ -21,6 +21,126 @@ Bundler.require
 IO_CHUNK_SIZE = 65554
 IDLE_SPIN = 10.0
 
+=begin
+        class UvProcessOptions < FFI::Struct
+            layout  :st_dev,      :uint64,
+                    :st_mode,     :uint64,
+                    :st_nlink,    :uint64,
+                    :st_uid,      :uint64,
+                    :st_gid,      :uint64,
+                    :st_rdev,     :uint64,
+                    :st_ino,      :uint64,
+                    :st_size,     :uint64,
+                    :st_blksize,  :uint64,
+                    :st_blocks,   :uint64,
+                    :st_flags,    :uint64,
+                    :st_gen,      :uint64,
+                    :st_atim,     UvTimespec,
+                    :st_mtim,     UvTimespec,
+                    :st_ctim,     UvTimespec,
+                    :st_birthtim, UvTimespec
+        end
+=end
+
+
+#module UV
+  # uv_process_t is a subclass of uv_handle_t
+  #
+  # ## Fields:
+  # :data ::
+  #   (FFI::Pointer(*Void))
+  # :loop ::
+  #   (Loop)
+  # :type ::
+  #   (Symbol from `enum_handle_type`)
+  # :close_cb ::
+  #   (Proc(callback_close_cb))
+  # :handle_queue ::
+  #   (Array<FFI::Pointer(*Void)>)
+  # :next_closing ::
+  #   (Handle)
+  # :flags ::
+  #   (Integer)
+  # :exit_cb ::
+  #   (Proc(callback_exit_cb))
+  # :pid ::
+  #   (Integer)
+  # :queue ::
+  #   (Array<FFI::Pointer(*Void)>)
+  # :status ::
+  #   (Integer)
+#  module ProcessWrappers
+#    # @param [Integer] signum
+#    # @return [Integer]
+#    def kill(signum)
+#      UV.process_kill(self, signum)
+#    end
+#  end
+
+  class UvProcess < FFI::Struct
+    #include ProcessWrappers
+    layout :data, :pointer,
+           :loop, :pointer, #Libuv::Loop.by_ref,
+           :type, :pointer,
+           :close_cb, :pointer,
+           :handle_queue, [:pointer, 2],
+           :next_closing, :pointer, #Libuv::Handle.by_ref,
+           :flags, :uint,
+           :exit_cb, :pointer,
+           :pid, :int,
+           :queue, [:pointer, 2],
+           :status, :int
+  end
+
+  class UvProcessOptions < FFI::Struct
+    layout :exit_cb, :pointer,
+           :file, :string,
+           :args, :pointer,
+           :env, :pointer,
+           :cwd, :string,
+           :flags, :uint,
+           :stdio_count, :int,
+           :stdio, :int, #StdioContainer.by_ref,
+           :uid, :uint,
+           :gid, :uint
+
+    def file=(val)
+      pos = offset_of(:file)
+      if val.nil?
+        self.pointer.put_pointer(pos, FFI::MemoryPointer::NULL)
+      elsif val.is_a?(FFI::MemoryPointer)
+        self.pointer.put_pointer(pos, val)
+      else
+        fail("file= requires an FFI::MemoryPointer or nil")
+      end
+
+      val
+    end
+  end
+
+#end
+
+=begin
+module Libuv
+  module Ext
+    attach_function :process_init, :uv_process_init, [:uv_process_t], :int, :blocking => true
+  end
+end
+
+module Libuv
+  class Process < Handle
+        def initialize(command)
+            # uv_idle_t
+            # attach_function :idle_init, :uv_idle_init, [:uv_loop_t, :uv_idle_t], :int, :blocking => true
+            process_ptr = ::Libuv::Ext.allocate_handle_process
+            error = check_result(::Libuv::Ext.process_init(process_ptr))
+
+            super(process_ptr, error)
+        end
+  end
+end
+=end
+
 class Bespoked
   def kubectl_get
     if ENV["CI"] && ENV["CI"] == "true"
@@ -130,10 +250,6 @@ class Bespoked
 
     File.link(File.realpath("nginx/empty.nginx.conf"), File.join(var_lib_k8s, "nginx.conf"))
 
-    system("nginx", "-p", var_lib_k8s, "-c", "nginx.conf")
-
-    puts var_lib_k8s
-
     # using libuvs process stream, or popen, or system, need nginx_pid
     #run_nginx_in_background()
     #while event = shit_from_ingress
@@ -143,7 +259,45 @@ class Bespoked
 
     #puts io_for_watch("ingresses")
 
+    puts var_lib_k8s
+
     run_loop = Libuv::Loop.default
+
+    p run_loop
+
+    # Libuv::Ext::spawn(Libuv::Loop.default, nil, {})
+
+    process_ptr = UvProcess.new #::Libuv::Ext.allocate_handle_process
+    #options_ptr = ::Libuv::Ext.allocate_options
+
+    #handle_size = Libuv::Ext.handle_size(:process)
+    options_ptr = UvProcessOptions.new #Libuv::Ext::LIBC.malloc(handle_size)
+
+    p options_ptr.methods
+    p options_ptr.members
+
+array = []
+size = array.size
+offset = 0
+
+# Create the pointer to the array
+args_pointer = FFI::MemoryPointer.new :string, size
+
+# Fill the memory location with your data
+#args_pointer.write_array_of_pointer array
+
+    options_ptr.file = FFI::MemoryPointer.from_string("/usr/local/bin/htop")
+    options_ptr[:args] = args_pointer #FFI::MemoryPointer.from_array([])
+
+    p [process_ptr, options_ptr, options_ptr[:file]].inspect
+
+    spawned = Libuv::Ext::spawn(run_loop.handle, process_ptr, options_ptr) #run_loop, process_ptr, {:file => "ps", :args => []})
+
+    p spawned.inspect
+
+    p run_loop.lookup_error(spawned).inspect
+
+    #p Libuv::Process.new("ls")
 
     client = run_loop.tcp
 
@@ -170,6 +324,8 @@ class Bespoked
       # Headers and body is all parsed
       p "Done!"
     end
+
+    #puts Libuv::Ext.spawn("nginx", "-p", var_lib_k8s, "-c", "nginx.conf")
 
     client.connect('192.168.84.10', 8443) do |client|
       client.start_tls({:server => false, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
