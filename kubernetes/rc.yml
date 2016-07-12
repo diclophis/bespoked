@@ -39,19 +39,7 @@ spec:
         - name: dockercfgjson
       containers:
       - image: #NOTE: this is re-written via manifest.rb
-        #livenessProbe:
-        #  httpGet:
-        #    path: /healthz
-        #    port: 8081
-        #    scheme: HTTP
-        #  initialDelaySeconds: 30
-        #  timeoutSeconds: 5
-	env:
-        - name: KUBERNETES_API_BEARER_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: bespoked-ingress-secret
-              key: api-bearer-token
+        env:
         name: bespoked-controller
         resources:
           limits:

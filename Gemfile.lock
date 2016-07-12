@@ -5,6 +5,7 @@ GEM
     ffi-compiler (1.0.1)
       ffi (>= 1.0.0)
       rake
+    http_parser.rb (0.6.0)
     libuv (2.0.8)
       ffi (>= 1.9)
       ruby-tls (>= 2.0.0)
@@ -20,5 +21,6 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  http_parser.rb
   libuv
   yajl-ruby

@@ -5,6 +5,9 @@ require 'tempfile'
 require 'yaml'
 require 'fileutils'
 
+require 'libuv'
+require 'libuv/coroutines'
+
 # rubygems
 Bundler.require
 
@@ -12,6 +15,8 @@ Bundler.require
 # http://localhost:8080/apis/extensions/v1beta1/namespaces/default/ingresses
 # apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=9933
 # curl -v --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt -XGET -H "User-Agent: kubectl" https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT/apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=9933
+#apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=9933
+# curl -k -v -XGET  -H "Accept: application/json, */*" -H "User-Agent: kubectl/v1.3.0 (linux/amd64) kubernetes/2831379" http://localhost:8080/apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0
 
 IO_CHUNK_SIZE = 65554
 IDLE_SPIN = 10.0
@@ -23,6 +28,94 @@ class Bespoked
     else
       ["sleep", "9999"]
     end
+  end
+
+  def io_for_watch(kind)
+    if ENV["CI"] && ENV["CI"] == "true"
+      # do system call to make IO that returns mocked watched json stream
+    else
+      path_prefix = "apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0"
+      path_for_watch = begin
+        case kind
+          when "pods"
+            path_prefix % ["v1", "pods"]
+
+          when "services"
+            path_prefix % ["v1", "services"]
+
+          when "ingresses"
+            path_prefix % ["v1beta1", "ingresses"]
+
+        else
+          raise "unknown api Kind to watch: #{kind}"
+        end
+      end
+
+      puts path_for_watch.inspect
+      # curl --cacert kubernetes/ca.crt -v -XGET -H "Authorization: Bearer $(cat kubernetes/api.token)" -H "Accept: application/json, */*" -H "User-Agent: kubectl/v1.3.0 (linux/amd64) kubernetes/2831379" https://192.168.84.10:8443/apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0
+
+      @loop = Libuv::Loop.default
+      @client = @loop.tcp
+
+      trap 'INT' do
+        $stderr.write("i")
+        @loop.stop
+      end
+
+      # connect client to server
+      @client.connect('192.168.84.10', 8443) do |client|
+        $stderr.write("x")
+
+        client.start_tls
+        client.progress do |data|
+          puts data.inspect
+        end
+
+        client.start_read
+        $stderr.write("z")
+      end
+
+      # catch errors
+      @client.catch do |reason|
+        puts reason.inspect
+      end
+
+      # close the handle
+      @client.finally do
+        $stderr.write("0")
+      end
+
+#      timer = @loop.timer do
+#        puts "t"
+#        timer.again
+#      end
+#      timer.start(500)
+
+      @loop.all(@client).catch do |reason|
+        puts ["run_loop caught error", reason].inspect
+      end
+
+      @loop.run do |logger|
+=begin
+        logger.progress do |level, errorid, error|
+          begin
+            puts "Log called: #{level}: #{errorid}\n#{error.message}\n#{error.backtrace.join("\n") if error.backtrace}\n"
+          rescue Exception => e
+            puts "error in logger #{e.inspect}"
+          end
+        end
+=end
+#        co timer
+
+        $stderr.write(".")
+      end
+
+      $stderr.write("q")
+    end
+  end
+
+  def base_api_url
+    # 
   end
 
   def ingress(options = {})
@@ -41,6 +134,15 @@ class Bespoked
 
     puts var_lib_k8s
 
+    # using libuvs process stream, or popen, or system, need nginx_pid
+    #run_nginx_in_background()
+    #while event = shit_from_ingress
+    #  write_nginx
+    #  Kernel.kill(nginx_pid, "HUP")
+    #end
+
+    #puts io_for_watch("ingresses")
+
     run_loop = Libuv::Loop.default
 
     client = run_loop.tcp
@@ -49,12 +151,42 @@ class Bespoked
       puts ["run_loop caught error", reason].inspect
     end
 
-    client.connect('127.0.0.1', 34567) do |client|
+    run_loop.signal(:INT) do |_sigint|
+      run_loop.stop
+    end
+
+    http_parser = Http::Parser.new
+
+    http_parser.on_headers_complete = proc do
+      p http_parser.headers
+    end
+
+    http_parser.on_body = proc do |chunk|
+      # One chunk of the body
+      p chunk
+    end
+
+    http_parser.on_message_complete = proc do |env|
+      # Headers and body is all parsed
+      p "Done!"
+    end
+
+    client.connect('192.168.84.10', 8443) do |client|
+      client.start_tls({:server => false, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
+
+    #client.connect('127.0.0.1', 8080) do |client|
       client.progress do |data|
-        puts ["client got", data].inspect
+        #puts data #["client got", data].inspect
+        http_parser << data
       end
 
-      client.write('GET /goes-here HTTP/1.1\r\nHost: foo-bar\r\n\r\n')
+      client.on_handshake do
+        get_watch = "GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses HTTP/1.1\r\nHost: 192.168.84.10\r\nAuthorization: Bearer #{File.read('kubernetes/api.token').strip}\r\nAccept: application/json, */*\r\nUser-Agent: kubectl\r\n\r\n"
+        puts get_watch
+        client.write(get_watch)
+        #client.write("GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0 HTTP/1.1\r\nHost: foo-bar\r\n\r\n")
+      end
+
       client.start_read
     end
 
@@ -71,7 +203,6 @@ class Bespoked
     end
 
     puts "exiting..."
-
 
     #NOTE: the folling ingress controller
     #      has the following issues that should be correct

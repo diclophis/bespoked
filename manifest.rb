@@ -48,4 +48,4 @@ end
 
 handler = DocumentStreamHandler.new(&document_handler_switch)
 parser = Psych::Parser.new(handler)
-parser.parse(File.read(rc_yml_path), "watch.json")
+parser.parse(File.read(rc_yml_path), rc_yml_path)
