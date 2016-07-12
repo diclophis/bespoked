@@ -147,8 +147,7 @@ class Bespoked
       puts ["run_loop caught error", reason].inspect
     end
 
-    run_loop.signal(:INT) do |reason|
-      puts reason.inspect
+    run_loop.signal(:INT) do |_sigint|
       run_loop.stop
     end
 
@@ -157,12 +156,14 @@ class Bespoked
 
     #client.connect('127.0.0.1', 8080) do |client|
       client.progress do |data|
-        puts ["client got", data].inspect
+        puts data #["client got", data].inspect
       end
 
       client.on_handshake do
-        #client.write('GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0 HTTP/1.1\r\nAuthorization: Bearer #{File.read("kubernetes/api.token").strip}\r\n\r\n')
-        client.write("GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0 HTTP/1.1\r\nHost: foo-bar\r\n\r\n")
+        get_watch = "GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses HTTP/1.1\r\nHost: 192.168.84.10\r\nAuthorization: Bearer #{File.read('kubernetes/api.token').strip}\r\nAccept: application/json, */*\r\nUser-Agent: kubectl\r\n\r\n"
+        puts get_watch
+        client.write(get_watch)
+        #client.write("GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0 HTTP/1.1\r\nHost: foo-bar\r\n\r\n")
       end
 
       client.start_read
