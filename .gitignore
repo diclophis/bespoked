@@ -1,1 +1,3 @@
 build
+kubernetes/api.token
+kubernetes/ca.crt

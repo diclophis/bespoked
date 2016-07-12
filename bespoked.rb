@@ -151,12 +151,29 @@ class Bespoked
       run_loop.stop
     end
 
+    http_parser = Http::Parser.new
+
+    http_parser.on_headers_complete = proc do
+      p http_parser.headers
+    end
+
+    http_parser.on_body = proc do |chunk|
+      # One chunk of the body
+      p chunk
+    end
+
+    http_parser.on_message_complete = proc do |env|
+      # Headers and body is all parsed
+      p "Done!"
+    end
+
     client.connect('192.168.84.10', 8443) do |client|
       client.start_tls({:server => false, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
 
     #client.connect('127.0.0.1', 8080) do |client|
       client.progress do |data|
-        puts data #["client got", data].inspect
+        #puts data #["client got", data].inspect
+        http_parser << data
       end
 
       client.on_handshake do
