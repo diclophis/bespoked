@@ -35,6 +35,10 @@ class Bespoked
     FileUtils.mkdir_p(var_lib_k8s_app_to_alias_dir)
     FileUtils.mkdir_p(var_lib_k8s_sites_dir)
 
+    File.link(File.realpath("nginx/empty.nginx.conf"), File.join(var_lib_k8s, "nginx.conf"))
+
+    system("nginx", "-p", var_lib_k8s, "-c", "nginx.conf")
+
     puts var_lib_k8s
 
     run_loop = Libuv::Loop.default
