@@ -8,3 +8,8 @@ gem 'libuv', :require => 'libuv'
 
 # simple callback-based HTTP request/response parser
 gem 'http_parser.rb', :require => 'http/parser'
+
+group :test do
+  # for testing
+  gem 'minitest', '5.7.0'
+end

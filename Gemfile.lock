@@ -10,6 +10,7 @@ GEM
       ffi (>= 1.9)
       ruby-tls (>= 2.0.0)
       thread_safe
+    minitest (5.7.0)
     rake (11.2.2)
     ruby-tls (2.1.2)
       ffi-compiler (>= 0.0.2)
@@ -23,4 +24,5 @@ PLATFORMS
 DEPENDENCIES
   http_parser.rb
   libuv
+  minitest (= 5.7.0)
   yajl-ruby
