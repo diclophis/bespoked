@@ -156,7 +156,7 @@ class Bespoked
     if ENV["CI"] && ENV["CI"] == "true"
       # do system call to make IO that returns mocked watched json stream
     else
-      path_prefix = "apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0"
+      path_prefix = "apis/extensions/%s/watch/namespaces/default/%s" #TODO: ?resourceVersion=0
       path_for_watch = begin
         case kind
           when "pods"
@@ -175,69 +175,7 @@ class Bespoked
 
       puts path_for_watch.inspect
       # curl --cacert kubernetes/ca.crt -v -XGET -H "Authorization: Bearer $(cat kubernetes/api.token)" -H "Accept: application/json, */*" -H "User-Agent: kubectl/v1.3.0 (linux/amd64) kubernetes/2831379" https://192.168.84.10:8443/apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0
-
-      @loop = Libuv::Loop.default
-      @client = @loop.tcp
-
-      trap 'INT' do
-        $stderr.write("i")
-        @loop.stop
-      end
-
-      # connect client to server
-      @client.connect('192.168.84.10', 8443) do |client|
-        $stderr.write("x")
-
-        client.start_tls
-        client.progress do |data|
-          puts data.inspect
-        end
-
-        client.start_read
-        $stderr.write("z")
-      end
-
-      # catch errors
-      @client.catch do |reason|
-        puts reason.inspect
-      end
-
-      # close the handle
-      @client.finally do
-        $stderr.write("0")
-      end
-
-#      timer = @loop.timer do
-#        puts "t"
-#        timer.again
-#      end
-#      timer.start(500)
-
-      @loop.all(@client).catch do |reason|
-        puts ["run_loop caught error", reason].inspect
-      end
-
-      @loop.run do |logger|
-=begin
-        logger.progress do |level, errorid, error|
-          begin
-            puts "Log called: #{level}: #{errorid}\n#{error.message}\n#{error.backtrace.join("\n") if error.backtrace}\n"
-          rescue Exception => e
-            puts "error in logger #{e.inspect}"
-          end
-        end
-=end
-#        co timer
-
-        $stderr.write(".")
-      end
-
-      $stderr.write("q")
     end
-  end
-
-  def base_api_url
-    # 
   end
 
   def ingress(options = {})
@@ -251,6 +189,10 @@ class Bespoked
     FileUtils.mkdir_p(var_lib_k8s_sites_dir)
 
     File.link(File.realpath("nginx/empty.nginx.conf"), File.join(var_lib_k8s, "nginx.conf"))
+    nginx_access_log_path = File.join(var_lib_k8s, "access.log")
+
+    #p nginx_access_file.inspect
+    #p nginx_access_file.fileno
 
     # using libuvs process stream, or popen, or system, need nginx_pid
     #run_nginx_in_background()
@@ -258,28 +200,45 @@ class Bespoked
     #  write_nginx
     #  Kernel.kill(nginx_pid, "HUP")
     #end
-
     #puts io_for_watch("ingresses")
-
-    puts var_lib_k8s
+    #puts var_lib_k8s
 
     run_loop = Libuv::Loop.default
 
-    p run_loop
+    #p run_loop
 
     client = run_loop.tcp
 
-    nginx_stdout_pipe = run_loop.pipe
-    nginx_stderr_pipe = run_loop.pipe
+    #FileUtils.touch(nginx_access_log_path)
+    nginx_access_file = File.open(nginx_access_log_path, "a+")
 
     combined = ["nginx", "-p", var_lib_k8s, "-c", "nginx.conf"]
     _a,b,c,nginx_process_waiter = Open3.popen3(*combined)
-    puts [_a,b,c,nginx_process_waiter].inspect
+    #puts [_a,b,c,nginx_process_waiter].inspect
+
+    nginx_stdout_pipe = run_loop.pipe
+    nginx_stderr_pipe = run_loop.pipe
+    nginx_access_pipe = run_loop.pipe
 
     nginx_stdout_pipe.open(b.fileno)
     nginx_stderr_pipe.open(c.fileno)
+    nginx_access_pipe.open(nginx_access_file.fileno)
 
-    run_loop.all(client, nginx_stdout_pipe, nginx_stderr_pipe).catch do |reason|
+    p nginx_access_log_path
+    #sleep 1
+
+    #nginx_access_log_watcher = run_loop.fs_event(var_lib_k8s)
+    #puts nginx_access_log_watcher.inspect
+
+    #nginx_access_log_watcher.then do |ev|
+    #  p "wtf"
+    #  puts ev.inspect
+    #end
+
+    #nginx_access_pipe = run_loop.file(nginx_access_log_path, File::RDONLY)
+    #nginx_access_pipe.send_file(nginx_stderr_pipe)
+
+    run_loop.all(client, nginx_stdout_pipe, nginx_stderr_pipe, nginx_access_pipe).catch do |reason|
       puts ["run_loop caught error", reason].inspect
     end
 
@@ -327,7 +286,7 @@ class Bespoked
 
     nginx_stderr_pipe.progress do |data|
       puts [:nginx_stderr, data].inspect
-      Process.kill("HUP", nginx_process_waiter.pid)
+      #Process.kill("HUP", nginx_process_waiter.pid)
     end
     nginx_stderr_pipe.start_read
 
@@ -335,6 +294,11 @@ class Bespoked
       puts [:nginx_stdout, data].inspect
     end
     nginx_stdout_pipe.start_read
+
+    nginx_access_pipe.progress do |data|
+      puts [:nginx_access, data].inspect
+    end
+    nginx_access_pipe.start_read
 
     run_loop.run do |logger|
       logger.progress do |level, errorid, error|
