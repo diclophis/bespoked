@@ -5,6 +5,8 @@ require 'tempfile'
 require 'yaml'
 require 'fileutils'
 
+require 'open3'
+
 require 'libuv'
 require 'libuv/coroutines'
 
@@ -265,48 +267,27 @@ class Bespoked
 
     p run_loop
 
-    # Libuv::Ext::spawn(Libuv::Loop.default, nil, {})
-
-    process_ptr = UvProcess.new #::Libuv::Ext.allocate_handle_process
-    #options_ptr = ::Libuv::Ext.allocate_options
-
-    #handle_size = Libuv::Ext.handle_size(:process)
-    options_ptr = UvProcessOptions.new #Libuv::Ext::LIBC.malloc(handle_size)
-
-    p options_ptr.methods
-    p options_ptr.members
-
-array = []
-size = array.size
-offset = 0
-
-# Create the pointer to the array
-args_pointer = FFI::MemoryPointer.new :string, size
-
-# Fill the memory location with your data
-#args_pointer.write_array_of_pointer array
-
-    options_ptr.file = FFI::MemoryPointer.from_string("/usr/local/bin/htop")
-    options_ptr[:args] = args_pointer #FFI::MemoryPointer.from_array([])
-
-    p [process_ptr, options_ptr, options_ptr[:file]].inspect
-
-    spawned = Libuv::Ext::spawn(run_loop.handle, process_ptr, options_ptr) #run_loop, process_ptr, {:file => "ps", :args => []})
-
-    p spawned.inspect
-
-    p run_loop.lookup_error(spawned).inspect
-
-    #p Libuv::Process.new("ls")
-
     client = run_loop.tcp
 
-    run_loop.all(client).catch do |reason|
+    nginx_stdout_pipe = run_loop.pipe
+    nginx_stderr_pipe = run_loop.pipe
+
+    combined = ["nginx", "-p", var_lib_k8s, "-c", "nginx.conf"]
+    _a,b,c,nginx_process_waiter = Open3.popen3(*combined)
+    puts [_a,b,c,nginx_process_waiter].inspect
+
+    nginx_stdout_pipe.open(b.fileno)
+    nginx_stderr_pipe.open(c.fileno)
+
+    run_loop.all(client, nginx_stdout_pipe, nginx_stderr_pipe).catch do |reason|
       puts ["run_loop caught error", reason].inspect
     end
 
     run_loop.signal(:INT) do |_sigint|
+      Process.kill("HUP", nginx_process_waiter.pid)
       run_loop.stop
+      nginx_process_waiter.join
+      puts "halted..."
     end
 
     http_parser = Http::Parser.new
@@ -324,8 +305,6 @@ args_pointer = FFI::MemoryPointer.new :string, size
       # Headers and body is all parsed
       p "Done!"
     end
-
-    #puts Libuv::Ext.spawn("nginx", "-p", var_lib_k8s, "-c", "nginx.conf")
 
     client.connect('192.168.84.10', 8443) do |client|
       client.start_tls({:server => false, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
@@ -345,6 +324,17 @@ args_pointer = FFI::MemoryPointer.new :string, size
 
       client.start_read
     end
+
+    nginx_stderr_pipe.progress do |data|
+      puts [:nginx_stderr, data].inspect
+      Process.kill("HUP", nginx_process_waiter.pid)
+    end
+    nginx_stderr_pipe.start_read
+
+    nginx_stdout_pipe.progress do |data|
+      puts [:nginx_stdout, data].inspect
+    end
+    nginx_stdout_pipe.start_read
 
     run_loop.run do |logger|
       logger.progress do |level, errorid, error|
