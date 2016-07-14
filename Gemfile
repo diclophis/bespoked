@@ -4,10 +4,10 @@ source 'https://rubygems.org'
 gem 'yajl-ruby', :require => 'yajl'
 
 # Ruby bindings for libuv
-gem 'libuv', :require => 'libuv'
+gem 'libuv'
 
 # simple callback-based HTTP request/response parser
-gem 'http_parser.rb', :require => 'http/parser'
+gem 'http_parser.rb'
 
 group :test do
   # for testing
