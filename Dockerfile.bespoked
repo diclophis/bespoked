@@ -1,5 +1,5 @@
 FROM alpine:3.4
-RUN touch /tmp/53c6d4c79fc0084624655d0a1a90b57f30342d1c
+RUN touch /tmp/40909450fdbc75819f45ed3879e5c50b622cd216
 RUN apk update && apk upgrade && apk add build-base ruby ruby-dev ruby-irb ruby-bundler
 RUN apk update && apk upgrade && apk add nginx
 RUN adduser -D -h /home/bespoked -s /bin/bash bespoked
@@ -7,4 +7,4 @@ RUN apk update && apk upgrade && apk add libffi-dev libuv libuv-dev git python
 ADD . /home/bespoked
 WORKDIR /home/bespoked
 RUN bundle
-CMD ["bundle", "exec" "ruby", "/home/bespoked/bespoked.rb"]
+CMD ["bundle", "exec" "ruby", "/home/bespoked/main.rb"]
