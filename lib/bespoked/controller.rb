@@ -51,7 +51,8 @@ module Bespoked
       File.link(local_nginx_conf, @nginx_conf_path)
       self.nginx_access_file = File.open(@nginx_access_log_path, File::CREAT|File::RDWR|File::APPEND)
 
-      combined = ["nginx", "-p", @var_lib_k8s, "-c", "nginx.conf"]
+      combined = ["nginx", "-p", @var_lib_k8s, "-c", "nginx.conf", "-g", "pid #{@var_lib_k8s}/nginx.pid;"]
+      p combined
       self.nginx_stdin, self.nginx_stdout, self.nginx_stderr, self.nginx_process_waiter = Open3.popen3(*combined)
 
       self.nginx_stdout_pipe = @run_loop.pipe
@@ -64,7 +65,7 @@ module Bespoked
 
       self.nginx_stdout_pipe.open(@nginx_stdout.fileno)
       self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
-      self.nginx_access_pipe.open(@nginx_access_file.fileno)
+      #self.nginx_access_pipe.open(@nginx_access_file.fileno)
 
       @nginx_stderr_pipe.progress do |data|
         @run_loop.log :nginx_stderr, data
@@ -76,10 +77,10 @@ module Bespoked
       end
       @nginx_stdout_pipe.start_read
 
-      @nginx_access_pipe.progress do |data|
-        @run_loop.log :nginx_access, data
-      end
-      @nginx_access_pipe.start_read
+      #@nginx_access_pipe.progress do |data|
+      #  @run_loop.log :nginx_access, data
+      #end
+      #@nginx_access_pipe.start_read
     end
 
     def halt(message)
@@ -145,8 +146,8 @@ module Bespoked
           p [level, errorid, error]
         end
       
-        #self.install_nginx_pipes
         self.create_watch_pipe("ingresses")
+        self.install_nginx_pipes
 
         @run_loop.log :info, :run_loop_started
       end
