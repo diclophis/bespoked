@@ -89,7 +89,7 @@ class Bespoked
     client = run_loop.tcp
 
     #FileUtils.touch(nginx_access_log_path)
-    nginx_access_file = File.open(nginx_access_log_path, "a+")
+    nginx_access_file = File.open(nginx_access_log_path, File::CREAT|File::RDWR|File::APPEND)
 
     combined = ["nginx", "-p", var_lib_k8s, "-c", "nginx.conf"]
     _a,b,c,nginx_process_waiter = Open3.popen3(*combined)
@@ -97,11 +97,11 @@ class Bespoked
 
     nginx_stdout_pipe = run_loop.pipe
     nginx_stderr_pipe = run_loop.pipe
-    nginx_access_pipe = run_loop.pipe
+    nginx_access_pipe = run_loop.file(nginx_access_log_path, File::CREAT|File::RDWR|File::APPEND)
 
     nginx_stdout_pipe.open(b.fileno)
     nginx_stderr_pipe.open(c.fileno)
-    nginx_access_pipe.open(nginx_access_file.fileno)
+    #nginx_access_pipe.open(nginx_access_file.fileno)
 
     p nginx_access_log_path
     #sleep 1
@@ -177,7 +177,7 @@ class Bespoked
     nginx_access_pipe.progress do |data|
       puts [:nginx_access, data].inspect
     end
-    nginx_access_pipe.start_read
+    #nginx_access_pipe.start_read
 
     run_loop.run do |logger|
       logger.progress do |level, errorid, error|
