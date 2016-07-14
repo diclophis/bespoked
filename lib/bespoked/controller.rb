@@ -41,10 +41,11 @@ module Bespoked
       self.run_loop = Libuv::Loop.default
       self.pipes = []
 
+      p @var_lib_k8s
     end
 
     # prepares nginx run loop
-    def install_nginx_pipes()
+    def install_nginx_pipes
       self.nginx_access_log_path = File.join(@var_lib_k8s, "access.log")
       self.nginx_conf_path = File.join(@var_lib_k8s, "nginx.conf")
       local_nginx_conf = File.realpath(File.join(File.dirname(__FILE__), "../..", "nginx/empty.nginx.conf"))
@@ -108,7 +109,6 @@ module Bespoked
 
       json_parser = Yajl::Parser.new
       json_parser.on_parse_complete = proc do |event|
-        p event
         self.handle_event(event)
       end
 
@@ -152,7 +152,24 @@ module Bespoked
       
         self.create_watch_pipe("ingresses")
         self.create_watch_pipe("services")
+        self.create_watch_pipe("pods")
+
         self.install_nginx_pipes
+
+        @heartbeat = @run_loop.timer
+        @heartbeat.progress do
+          if @run_loop.reactor_running?
+            @ingress_descriptions.values.each do |ingress_description|
+              vhosts_for_ingress = self.extract_vhosts(ingress_description)
+              vhosts_for_ingress.each do |pod, *vhosts_for_pod|
+                pod_name = self.extract_name(pod)
+                self.install_vhosts(pod_name, [vhosts_for_pod])
+              end
+            end
+          end
+
+          @heartbeat.stop
+        end
 
         @run_loop.log :info, :run_loop_started
       end
@@ -196,6 +213,7 @@ module Bespoked
     def register_service(description)
       name = self.extract_name(description)
       @service_descriptions[name] = description
+      @heartbeat.start(0, 200)
     end
 
     def locate_service(name)
@@ -205,6 +223,7 @@ module Bespoked
     def register_pod(description)
       name = self.extract_name(description)
       @pod_descriptions[name] = description
+      @heartbeat.start(0, 200)
     end
 
     def locate_pod(name)
@@ -214,6 +233,7 @@ module Bespoked
     def register_ingress(description)
       name = self.extract_name(description)
       @ingress_descriptions[name] = description
+      @heartbeat.start(0, 200)
     end
 
     def locate_ingress(name)
@@ -243,7 +263,7 @@ module Bespoked
                 if status = pod["status"]
                   pod_ip = status["podIP"]
                   service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
-                  vhosts << [rule_host, service_name, service_port]
+                  vhosts << [pod, rule_host, service_name, service_port]
                 end
               end
             end

@@ -13,6 +13,7 @@ require 'open3'
 Bundler.require
 
 require 'libuv'
+require 'libuv/coroutines'
 require 'http/parser'
 require 'yajl'
 
