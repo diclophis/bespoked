@@ -89,9 +89,11 @@ module Bespoked
       @run_loop.stop
     end
 
-    def create_watch_pipe(resource)
+    def create_watch_pipe(resource_kind)
       service_host = ENV["KUBERNETES_SERVICE_HOST"] || self.halt("KUBERNETES_SERVICE_HOST missing")
       service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || self.halt("KUBERNETES_SERVICE_PORT_HTTPS missing")
+      bearer_token = File.read('kubernetes/api.token').strip
+      get_watch = "GET /apis/extensions/v1beta1/watch/namespaces/default/#{resource_kind} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: application/json, */*\r\nUser-Agent: bespoked\r\n\r\n"
 
       client = @run_loop.tcp
 
@@ -119,10 +121,8 @@ module Bespoked
         end
 
         client.on_handshake do
-          get_watch = "GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses HTTP/1.1\r\nHost: 192.168.84.10\r\nAuthorization: Bearer #{File.read('kubernetes/api.token').strip}\r\nAccept: application/json, */*\r\nUser-Agent: kubectl\r\n\r\n"
           puts get_watch
           client.write(get_watch)
-          #client.write("GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0 HTTP/1.1\r\nHost: foo-bar\r\n\r\n")
         end
 
         client.start_read
@@ -139,8 +139,8 @@ module Bespoked
           p [level, errorid, error]
         end
       
-        self.install_nginx_pipes
         self.create_watch_pipe("ingresses")
+        self.install_nginx_pipes
 
         @run_loop.log :info, :run_loop_started
       end
