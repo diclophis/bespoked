@@ -4,15 +4,17 @@ class BespokedControllerTest < MiniTest::Spec
   before do
     @mock_var_lib_k8s = Dir.mktmpdir
     @mock_pod_name = "mock-pod"
-    @mock_vhosts = [
-      # app1 is a single container, on node1
-      ["mock-app1.tld", "feature-xyz-app1-unicorn", "256.0.0.1:3001"]
-      #TODO: multiple apps, containers spanning multiple nodes
-    ]
 
     @mock_pod = YAML.load(File.read(File.join("test", "fixtures", "pod.yml")))
     @mock_service = YAML.load(File.read(File.join("test", "fixtures", "service.yml")))
     @mock_ingress = YAML.load(File.read(File.join("test", "fixtures", "ingress.yml")))
+
+    @mock_vhosts = [
+      # app1 is a single container, on node1
+      [@mock_pod, "mock-app1.tld", "feature-xyz-app1-unicorn", "256.0.0.1:3001"]
+      #TODO: multiple apps, containers spanning multiple nodes
+    ]
+
   end
 
   describe "initialize" do
@@ -61,8 +63,8 @@ class BespokedControllerTest < MiniTest::Spec
     it "returns vhosts when all dependencies are located" do
       controller = Bespoked::Controller.new
 
-      controller.register_pod(@mock_pod)
-      controller.register_service(@mock_service)
+      controller.register_pod("ADDED", @mock_pod)
+      controller.register_service("ADDED", @mock_service)
   
       controller.extract_vhosts(@mock_ingress).must_equal @mock_vhosts
     end
