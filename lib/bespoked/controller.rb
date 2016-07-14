@@ -44,7 +44,7 @@ module Bespoked
     end
 
     # prepares nginx run loop
-    def install_nginx_pipes
+    def install_nginx_pipes()
       self.nginx_access_log_path = File.join(@var_lib_k8s, "access.log")
       self.nginx_conf_path = File.join(@var_lib_k8s, "nginx.conf")
       local_nginx_conf = File.realpath(File.join(File.dirname(__FILE__), "../..", "nginx/empty.nginx.conf"))
@@ -100,19 +100,25 @@ module Bespoked
       service_host = ENV["KUBERNETES_SERVICE_HOST"] || self.halt("KUBERNETES_SERVICE_HOST missing")
       service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || self.halt("KUBERNETES_SERVICE_PORT_HTTPS missing")
       bearer_token = File.read('kubernetes/api.token').strip
-      get_watch = "GET /apis/extensions/v1beta1/watch/namespaces/default/#{resource_kind} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: application/json, */*\r\nUser-Agent: bespoked\r\n\r\n"
+      get_watch = "GET #{self.path_for_watch(resource_kind)} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: */*\r\nUser-Agent: bespoked\r\n\r\n"
 
       client = @run_loop.tcp
 
       http_parser = Http::Parser.new
 
+      json_parser = Yajl::Parser.new
+      json_parser.on_parse_complete = proc do |event|
+        p event
+        self.handle_event(event)
+      end
+
       http_parser.on_headers_complete = proc do
-        p http_parser.headers
+        #p [resource_kind, http_parser.headers]
       end
 
       http_parser.on_body = proc do |chunk|
         # One chunk of the body
-        p chunk
+        json_parser << chunk
       end
 
       http_parser.on_message_complete = proc do |env|
@@ -123,12 +129,10 @@ module Bespoked
         client.start_tls({:server => false, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
 
         client.progress do |data|
-          #puts data #["client got", data].inspect
           http_parser << data
         end
 
         client.on_handshake do
-          puts get_watch
           client.write(get_watch)
         end
 
@@ -147,6 +151,7 @@ module Bespoked
         end
       
         self.create_watch_pipe("ingresses")
+        self.create_watch_pipe("services")
         self.install_nginx_pipes
 
         @run_loop.log :info, :run_loop_started
@@ -206,6 +211,15 @@ module Bespoked
       @pod_descriptions[name]
     end
 
+    def register_ingress(description)
+      name = self.extract_name(description)
+      @ingress_descriptions[name] = description
+    end
+
+    def locate_ingress(name)
+      @ingress_descriptions[name]
+    end
+
     def extract_name(description)
       if metadata = description["metadata"]
         metadata["name"]
@@ -238,6 +252,55 @@ module Bespoked
       end
 
       vhosts
+    end
+
+    def path_for_watch(kind)
+      path_prefix = "/%s/watch/namespaces/default/%s" #TODO: ?resourceVersion=0
+      path_for_watch = begin
+        case kind
+          when "pods"
+            path_prefix % ["api/v1", "pods"]
+
+          when "services"
+            path_prefix % ["api/v1", "services"]
+
+          when "ingresses"
+            path_prefix % ["apis/extensions/v1beta1", "ingresses"]
+
+        else
+          raise "unknown api Kind to watch: #{kind}"
+        end
+      end
+
+      # curl --cacert kubernetes/ca.crt -v -XGET -H "Authorization: Bearer $(cat kubernetes/api.token)" -H "Accept: application/json, */*" -H "User-Agent: kubectl/v1.3.0 (linux/amd64) kubernetes/2831379" https://192.168.84.10:8443/apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0
+      path_for_watch
+    end
+
+    def handle_event(event)
+      type = event["type"]
+      description = event["object"]
+
+      if description
+        kind = description["kind"]
+        name = description["metadata"]["name"]
+        case kind
+          when "IngressList", "PodList", "ServiceList"
+            p [type, kind]
+
+          when "Pod"
+            p [type, kind]
+            self.register_pod(description)
+
+          when "Service"
+            p [type, kind]
+            self.register_service(description)
+
+          when "Ingress"
+            p [type, kind]
+            self.register_ingress(description)
+
+        end
+      end
     end
   end
 end
