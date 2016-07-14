@@ -1,0 +1,13 @@
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: feature-xyz-app1-unicorn-vhost
+spec:
+  rules:
+  - host: mock-app1.tld
+    http:
+      paths:
+      - backend:
+          serviceName: feature-xyz-app1-unicorn
+          servicePort: 3001

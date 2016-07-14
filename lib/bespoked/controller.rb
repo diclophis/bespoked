@@ -7,7 +7,10 @@ module Bespoked
                   :var_lib_k8s_app_to_alias_dir,
                   :var_lib_k8s_sites_dir,
                   :nginx_access_log_path,
-                  :nginx_conf_path
+                  :nginx_conf_path,
+                  :pod_descriptions,
+                  :service_descriptions,
+                  :ingress_descriptions
 
     def initialize(options = {})
       self.var_lib_k8s = options["var-lib-k8s"] || Dir.mktmpdir
@@ -26,9 +29,14 @@ module Bespoked
       local_nginx_conf = File.realpath(File.join(File.dirname(__FILE__), "../..", "nginx/empty.nginx.conf"))
       File.link(local_nginx_conf, @nginx_conf_path)
       nginx_access_file = File.open(@nginx_access_log_path, File::CREAT|File::RDWR|File::APPEND)
+
+      self.pod_descriptions = {}
+      self.service_descriptions = {}
+      self.ingress_descriptions = {}
     end
 
     def ingress
+      
     end
 
     def install_vhosts(pod_name, vhosts)
@@ -62,46 +70,58 @@ module Bespoked
           f.write(site_config)
         end
       end
-=begin
-        when "Ingress"
-          puts [kind, name].inspect
+    end
 
-          ingress_name = name
+    def register_service(description)
+      name = self.extract_name(description)
+      @service_descriptions[name] = description
+    end
 
-          ingress_description = description
+    def locate_service(name)
+      @service_descriptions[name]
+    end
 
-          spec_rules = ingress_description["spec"]["rules"]
+    def register_pod(description)
+      name = self.extract_name(description)
+      @pod_descriptions[name] = description
+    end
 
-          vhost_lines = []
-          spec_rules.each do |rule|
-            rule_host = rule["host"]
-            if http = rule["http"]
-              http["paths"].each do |http_path|
-                service_name = http_path["backend"]["serviceName"]
+    def locate_pod(name)
+      @pod_descriptions[name]
+    end
 
-                if service = service_descriptions[service_name]
-                  pod_name = service["spec"]["selector"]["name"]
+    def extract_name(description)
+      if metadata = description["metadata"]
+        metadata["name"]
+      end
+    end
 
-                  if pod = pod_descriptions[pod_name]
-                    pod_ip = pod["status"]["podIP"]
+    def extract_vhosts(description)
+      ingress_name = self.extract_name(description)
+      spec_rules = description["spec"]["rules"]
 
-                    service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
+      vhosts = []
 
-                    vhost_lines << [rule_host, service_name, service_port]
-                  else
-                    add_to_pending_documents = true
-                  end
-                else
-                  add_to_pending_documents = true
+      spec_rules.each do |rule|
+        rule_host = rule["host"]
+        if http = rule["http"]
+          http["paths"].each do |http_path|
+            service_name = http_path["backend"]["serviceName"]
+            if service = self.locate_service(service_name)
+              pod_name = service["spec"]["selector"]["name"]
+              if pod = self.locate_pod(pod_name)
+                if status = pod["status"]
+                  pod_ip = status["podIP"]
+                  service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
+                  vhosts << [rule_host, service_name, service_port]
                 end
               end
-            else
-              add_to_pending_documents = true
             end
           end
-
-          unless add_to_pending_documents
-=end
+        end
       end
+
+      vhosts
+    end
   end
 end
