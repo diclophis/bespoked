@@ -31,10 +31,7 @@ class Bespoked
     end
   end
 
-  def io_for_watch(kind)
-    if ENV["CI"] && ENV["CI"] == "true"
-      # do system call to make IO that returns mocked watched json stream
-    else
+  def path_for_watch(kind)
       path_prefix = "apis/extensions/%s/watch/namespaces/default/%s" #TODO: ?resourceVersion=0
       path_for_watch = begin
         case kind
@@ -52,8 +49,8 @@ class Bespoked
         end
       end
 
-      puts path_for_watch.inspect
       # curl --cacert kubernetes/ca.crt -v -XGET -H "Authorization: Bearer $(cat kubernetes/api.token)" -H "Accept: application/json, */*" -H "User-Agent: kubectl/v1.3.0 (linux/amd64) kubernetes/2831379" https://192.168.84.10:8443/apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0
+      path_for_watch
     end
   end
 
@@ -154,7 +151,7 @@ class Bespoked
       end
 
       client.on_handshake do
-        get_watch = "GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses HTTP/1.1\r\nHost: 192.168.84.10\r\nAuthorization: Bearer #{File.read('kubernetes/api.token').strip}\r\nAccept: application/json, */*\r\nUser-Agent: kubectl\r\n\r\n"
+        get_watch = "GET #{path_for_watch(resource_kind)} HTTP/1.1\r\nHost: 192.168.84.10\r\nAuthorization: Bearer #{File.read('kubernetes/api.token').strip}\r\nAccept: application/json, */*\r\nUser-Agent: kubectl\r\n\r\n"
         puts get_watch
         client.write(get_watch)
         #client.write("GET /apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0 HTTP/1.1\r\nHost: foo-bar\r\n\r\n")

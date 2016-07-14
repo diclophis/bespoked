@@ -10,7 +10,11 @@ require 'open3'
 #require 'fileutils'
 
 # gems
+Bundler.require
+
 require 'libuv'
+require 'libuv/coroutines'
 require 'http/parser'
+require 'yajl'
 
 require 'bespoked'

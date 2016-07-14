@@ -1,7 +1,7 @@
 source 'https://rubygems.org'
 
 # A streaming JSON parsing and encoding library for Ruby (C bindings to yajl)
-gem 'yajl-ruby', :require => 'yajl'
+gem 'yajl-ruby'
 
 # Ruby bindings for libuv
 gem 'libuv'
