@@ -48,4 +48,4 @@ spec:
           requests:
             cpu: 100m
             memory: 50Mi
-        command: ["bundle", "exec", "ruby", "bespoked.rb"]
+        command: ["bundle", "exec", "ruby", "main.rb"]
