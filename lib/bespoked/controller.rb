@@ -6,9 +6,7 @@ module Bespoked
                   :var_lib_k8s_host_to_app_dir,
                   :var_lib_k8s_app_to_alias_dir,
                   :var_lib_k8s_sites_dir,
-                  :pod_descriptions,
-                  :service_descriptions,
-                  :ingress_descriptions,
+                  :descriptions,
                   :run_loop,
                   :pipes,
                   :nginx_access_log_path,
@@ -33,15 +31,10 @@ module Bespoked
       FileUtils.mkdir_p(@var_lib_k8s_app_to_alias_dir)
       FileUtils.mkdir_p(@var_lib_k8s_sites_dir)
 
-
-      self.pod_descriptions = {}
-      self.service_descriptions = {}
-      self.ingress_descriptions = {}
+      self.descriptions = {}
 
       self.run_loop = Libuv::Loop.default
       self.pipes = []
-
-      p @var_lib_k8s
     end
 
     # prepares nginx run loop
@@ -53,7 +46,6 @@ module Bespoked
       self.nginx_access_file = File.open(@nginx_access_log_path, File::CREAT|File::RDWR|File::APPEND)
 
       combined = ["nginx", "-p", @var_lib_k8s, "-c", "nginx.conf", "-g", "pid #{@var_lib_k8s}/nginx.pid;"]
-      p combined
       self.nginx_stdin, self.nginx_stdout, self.nginx_stderr, self.nginx_process_waiter = Open3.popen3(*combined)
 
       self.nginx_stdout_pipe = @run_loop.pipe
@@ -66,6 +58,7 @@ module Bespoked
 
       self.nginx_stdout_pipe.open(@nginx_stdout.fileno)
       self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
+      #TODO: fix access.log print
       #self.nginx_access_pipe.open(@nginx_access_file.fileno)
 
       @nginx_stderr_pipe.progress do |data|
@@ -114,6 +107,7 @@ module Bespoked
 
       http_parser.on_headers_complete = proc do
         #p [resource_kind, http_parser.headers]
+        #TODO: raise on incompat stream format
       end
 
       http_parser.on_body = proc do |chunk|
@@ -123,6 +117,7 @@ module Bespoked
 
       http_parser.on_message_complete = proc do |env|
         # Headers and body is all parsed
+        #TODO: restart watch on disconnect
       end
 
       client.connect(service_host, service_port.to_i) do |client|
@@ -141,6 +136,8 @@ module Bespoked
     end
 
     def ingress
+      p @var_lib_k8s
+
       @run_loop.signal(:INT) do |_sigint|
         self.halt :run_loop_interupted
       end
@@ -148,6 +145,7 @@ module Bespoked
       @run_loop.run do |logger|
         logger.progress do |level, errorid, error|
           p [level, errorid, error]
+          puts error ? error.backtrace : nil
         end
       
         self.create_watch_pipe("ingresses")
@@ -159,13 +157,15 @@ module Bespoked
         @heartbeat = @run_loop.timer
         @heartbeat.progress do
           if @run_loop.reactor_running?
-            @ingress_descriptions.values.each do |ingress_description|
-              vhosts_for_ingress = self.extract_vhosts(ingress_description)
-              vhosts_for_ingress.each do |pod, *vhosts_for_pod|
-                p vhosts_for_pod
-                pod_name = self.extract_name(pod)
-                self.install_vhosts(pod_name, [vhosts_for_pod])
-                Process.kill("HUP", @nginx_process_waiter.pid)
+            if ingress_descriptions = @descriptions["ingress"]
+              ingress_descriptions.values.each do |ingress_description|
+                vhosts_for_ingress = self.extract_vhosts(ingress_description)
+                vhosts_for_ingress.each do |pod, *vhosts_for_pod|
+                  p vhosts_for_pod
+                  pod_name = self.extract_name(pod)
+                  self.install_vhosts(pod_name, [vhosts_for_pod])
+                  Process.kill("HUP", @nginx_process_waiter.pid)
+                end
               end
             end
           end
@@ -197,7 +197,6 @@ module Bespoked
 
         map_name = [pod_name, app].join("-")
 
-        #puts File.join(@var_lib_k8s_host_to_app_dir, map_name)
         File.open(File.join(@var_lib_k8s_host_to_app_dir, map_name), "w+") do |f|
           f.write(host_to_app_line)
         end
@@ -212,34 +211,27 @@ module Bespoked
       end
     end
 
-    def register_service(description)
-      name = self.extract_name(description)
-      @service_descriptions[name] = description
-      @heartbeat.start(0, 200)
-    end
+    KINDS = ["pod", "service", "ingress"]
+    KINDS.each do |kind|
+      register_method = "register_#{kind}"
+      locate_method = "locate_#{kind}"
 
-    def locate_service(name)
-      @service_descriptions[name]
-    end
+      define_method register_method do |event, description|
+        self.descriptions[kind] ||= {}
 
-    def register_pod(description)
-      name = self.extract_name(description)
-      @pod_descriptions[name] = description
-      @heartbeat.start(0, 200)
-    end
+        case event
+          when "ADDED", "MODIFIED"
+            name = self.extract_name(description)
+            self.descriptions[kind][name] = description
+          when "DELETED"
+            self.descriptions[kind].delete(name)
+        end
+      end
 
-    def locate_pod(name)
-      @pod_descriptions[name]
-    end
-
-    def register_ingress(description)
-      name = self.extract_name(description)
-      @ingress_descriptions[name] = description
-      @heartbeat.start(0, 200)
-    end
-
-    def locate_ingress(name)
-      @ingress_descriptions[name]
+      define_method locate_method do |name|
+        self.descriptions[kind] ||= {}
+        self.descriptions[kind][name]
+      end
     end
 
     def extract_name(description)
@@ -311,18 +303,20 @@ module Bespoked
 
           when "Pod"
             p [type, kind]
-            self.register_pod(description)
+            self.register_pod(type, description)
 
           when "Service"
             p [type, kind]
-            self.register_service(description)
+            self.register_service(type, description)
 
           when "Ingress"
             p [type, kind]
-            self.register_ingress(description)
+            self.register_ingress(type, description)
 
         end
       end
+
+      @heartbeat.start(0, 200)
     end
   end
 end
