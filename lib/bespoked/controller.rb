@@ -83,10 +83,16 @@ module Bespoked
     end
 
     def halt(message)
-      Process.kill("INT", @nginx_process_waiter.pid)
-      @nginx_process_waiter.join
-      @run_loop.log :fatal, message
+      if @nginx_process_waiter
+        begin
+          Process.kill("INT", @nginx_process_waiter.pid)
+        rescue Errno::ESRCH
+        end
+        @nginx_process_waiter.join
+      end
       @run_loop.stop
+      p message
+      #exit 1
     end
 
     def create_watch_pipe(resource)
@@ -139,7 +145,7 @@ module Bespoked
           p [level, errorid, error]
         end
       
-        self.install_nginx_pipes
+        #self.install_nginx_pipes
         self.create_watch_pipe("ingresses")
 
         @run_loop.log :info, :run_loop_started
