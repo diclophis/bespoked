@@ -93,7 +93,7 @@ module Bespoked
     def create_watch_pipe(resource_kind)
       service_host = ENV["KUBERNETES_SERVICE_HOST"] || self.halt("KUBERNETES_SERVICE_HOST missing")
       service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || self.halt("KUBERNETES_SERVICE_PORT_HTTPS missing")
-      bearer_token = File.read('kubernetes/api.token').strip
+      bearer_token = File.read('/var/run/secrets/kubernetes.io/serviceaccount/token').strip
       get_watch = "GET #{self.path_for_watch(resource_kind)} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: */*\r\nUser-Agent: bespoked\r\n\r\n"
 
       client = @run_loop.tcp

@@ -39,6 +39,7 @@ spec:
         - name: dockercfgjson
       containers:
       - image: #NOTE: this is re-written via manifest.rb
+        imagePullPolicy: Always
         env:
         name: bespoked-controller
         resources:
@@ -48,4 +49,5 @@ spec:
           requests:
             cpu: 100m
             memory: 50Mi
-        command: ["bundle", "exec", "ruby", "main.rb"]
+        #command: ["bundle", "exec", "ruby", "main.rb"]
+        command: ["sleep", "99999"]
