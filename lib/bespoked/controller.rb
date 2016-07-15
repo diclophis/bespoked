@@ -231,12 +231,14 @@ module Bespoked
       define_method register_method do |event, description|
         self.descriptions[kind] ||= {}
 
+        name = self.extract_name(description)
+
         case event
           when "ADDED", "MODIFIED"
-            name = self.extract_name(description)
             self.descriptions[kind][name] = description
           when "DELETED"
             self.descriptions[kind].delete(name)
+
         end
       end
 
