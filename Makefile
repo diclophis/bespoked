@@ -26,6 +26,7 @@ $(BUILD)/$(IMAGE_TAG): image
 install: $(MANIFEST_TMP)
 	cat $(MANIFEST_TMP)
 	kubectl apply -f $(MANIFEST_TMP)
+	kubectl rolling-update bespoked-replication-controller --image=$(IMAGE) --image-pull-policy=IfNotPresent --update-period=9s --poll-interval=3s
 
 $(MANIFEST_TMP): manifest.rb kubernetes/rc.yml $(BUILD)/$(IMAGE_TAG)
 	ruby manifest.rb $(REGISTRY_DOMAIN) $(IMAGE_NAME) $(IMAGE_TAG) > $(MANIFEST_TMP)
