@@ -14,7 +14,22 @@ spec:
     name: http
   selector:
     k8s-app: bespoked
-
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bespoked-health-service
+spec:
+  # The default backend must be of type NodePort.
+  type: NodePort
+  ports:
+  - nodePort: 30002
+    port: 8889
+    targetPort: 8182
+    protocol: TCP
+    name: http
+  selector:
+    k8s-app: bespoked
 ---
 apiVersion: v1
 kind: ReplicationController
