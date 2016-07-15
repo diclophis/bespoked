@@ -9,8 +9,9 @@ spec:
   # The default backend must be of type NodePort.
   type: NodePort
   ports:
-  - port: 8888
-    targetPort: 8080
+  - nodePort: 30001
+    port: 8888
+    targetPort: 8181
     protocol: TCP
     name: http
   selector:
@@ -49,5 +50,4 @@ spec:
           requests:
             cpu: 100m
             memory: 50Mi
-        #command: ["bundle", "exec", "ruby", "main.rb"]
-        command: ["sleep", "99999"]
+        command: ["bundle", "exec", "ruby", "main.rb"]
