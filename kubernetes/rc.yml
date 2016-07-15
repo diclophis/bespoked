@@ -3,14 +3,13 @@ apiVersion: v1
 kind: Service
 metadata:
   name: bespoked-service
-  labels:
-    k8s-app: bespoked
 spec:
   # The default backend must be of type NodePort.
   type: NodePort
   ports:
-  - port: 8888
-    targetPort: 8080
+  - nodePort: 30001
+    port: 8888
+    targetPort: 8181
     protocol: TCP
     name: http
   selector:
@@ -28,11 +27,12 @@ spec:
   replicas: 1
   selector:
     k8s-app: bespoked
+    version: rv1 #NOTE: this is re-written
   template:
     metadata:
       labels:
         k8s-app: bespoked
-        name: bespoked
+        version: rv1 #NOTE: this is re-written
     spec:
       terminationGracePeriodSeconds: 600
       imagePullSecrets:
@@ -49,5 +49,4 @@ spec:
           requests:
             cpu: 100m
             memory: 50Mi
-        #command: ["bundle", "exec", "ruby", "main.rb"]
-        command: ["sleep", "99999"]
+        command: ["bundle", "exec", "ruby", "main.rb"]

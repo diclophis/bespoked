@@ -142,6 +142,18 @@ module Bespoked
         self.halt :run_loop_interupted
       end
 
+      @run_loop.signal(:HUP) do |_sigint|
+        self.halt :run_loop_hangup
+      end
+
+      @run_loop.signal(3) do |_sigint|
+        self.halt :run_loop_quit
+      end
+
+      @run_loop.signal(15) do |_sigint|
+        self.halt :run_loop_terminated
+      end
+
       @run_loop.run do |logger|
         logger.progress do |level, errorid, error|
           p [level, errorid, error]
@@ -219,12 +231,14 @@ module Bespoked
       define_method register_method do |event, description|
         self.descriptions[kind] ||= {}
 
+        name = self.extract_name(description)
+
         case event
           when "ADDED", "MODIFIED"
-            name = self.extract_name(description)
             self.descriptions[kind][name] = description
           when "DELETED"
             self.descriptions[kind].delete(name)
+
         end
       end
 
