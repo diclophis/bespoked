@@ -3,6 +3,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: bespoked-service
+  namespace: default
 spec:
   # The default backend must be of type NodePort.
   type: NodePort
@@ -19,6 +20,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: bespoked-health-service
+  namespace: default
 spec:
   # The default backend must be of type NodePort.
   type: NodePort
@@ -35,6 +37,7 @@ apiVersion: v1
 kind: ReplicationController
 metadata:
   name: bespoked-replication-controller
+  namespace: default
   labels:
     k8s-app: bespoked
 spec:
@@ -45,11 +48,13 @@ spec:
     version: rv1 #NOTE: this is re-written
   template:
     metadata:
+      namespace: default
       labels:
         k8s-app: bespoked
         version: rv1 #NOTE: this is re-written
     spec:
       terminationGracePeriodSeconds: 600
+      serviceAccount: default
       imagePullSecrets:
         - name: dockercfgjson
       containers:
