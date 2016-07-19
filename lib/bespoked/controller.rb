@@ -6,6 +6,7 @@ module Bespoked
                   :var_lib_k8s_host_to_app_dir,
                   :var_lib_k8s_app_to_alias_dir,
                   :var_lib_k8s_sites_dir,
+                  :var_lib_k8s_logs_dir,
                   :descriptions,
                   :run_loop,
                   :pipes,
@@ -24,11 +25,13 @@ module Bespoked
       self.var_lib_k8s_host_to_app_dir = File.join(@var_lib_k8s, "host_to_app") 
       self.var_lib_k8s_app_to_alias_dir = File.join(@var_lib_k8s, "app_to_alias") 
       self.var_lib_k8s_sites_dir = File.join(@var_lib_k8s, "sites")
+      self.var_lib_k8s_logs_dir = File.join(@var_lib_k8s, "logs")
 
       # create mapping conf.d dirs
       FileUtils.mkdir_p(@var_lib_k8s_host_to_app_dir)
       FileUtils.mkdir_p(@var_lib_k8s_app_to_alias_dir)
       FileUtils.mkdir_p(@var_lib_k8s_sites_dir)
+      FileUtils.mkdir_p(@var_lib_k8s_logs_dir)
 
       self.descriptions = {}
 
@@ -307,18 +310,18 @@ module Bespoked
         name = description["metadata"]["name"]
         case kind
           when "IngressList", "PodList", "ServiceList"
-            p [type, kind]
+            p [type, kind, name]
 
           when "Pod"
-            p [type, kind]
+            p [type, kind, name]
             self.register_pod(type, description)
 
           when "Service"
-            p [type, kind]
+            p [type, kind, name]
             self.register_service(type, description)
 
           when "Ingress"
-            p [type, kind]
+            p [type, kind, name]
             self.register_ingress(type, description)
 
         end
