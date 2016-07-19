@@ -173,10 +173,14 @@ module Bespoked
               ingress_descriptions.values.each do |ingress_description|
                 vhosts_for_ingress = self.extract_vhosts(ingress_description)
                 vhosts_for_ingress.each do |pod, *vhosts_for_pod|
-                  p vhosts_for_pod
+                  p [Time.now] + vhosts_for_pod
                   pod_name = self.extract_name(pod)
                   self.install_vhosts(pod_name, [vhosts_for_pod])
-                  Process.kill("HUP", @nginx_process_waiter.pid)
+                  begin
+                    Process.kill("HUP", @nginx_process_waiter.pid)
+                  rescue Errno::ESRCH => no_child
+                    p [:no_child, @nginx_process_waiter.pid]
+                  end
                 end
               end
             end
@@ -330,7 +334,7 @@ module Bespoked
         end
       end
 
-      @heartbeat.start(0, 200)
+      @heartbeat.start(0, 1000)
     end
   end
 end

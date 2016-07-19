@@ -6,6 +6,8 @@ RUN adduser -D -h /home/bespoked -s /bin/bash bespoked
 RUN apk update && apk upgrade && apk add libffi-dev libuv libuv-dev git python
 ADD . /home/bespoked
 WORKDIR /home/bespoked
-RUN bundle
+RUN chown -R bespoked. /home/bespoked
+USER bespoked
+RUN bundle check --path=vendor/bundle || bundle --path=vendor/bundle --jobs=4 --retry=3 --deployment
 RUN bundle exec rake test
 CMD ["bundle", "exec" "ruby", "/home/bespoked/main.rb"]
