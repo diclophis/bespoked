@@ -14,7 +14,6 @@ module Bespoked
                   :nginx_access_file,
                   :nginx_stdout_pipe,
                   :nginx_stderr_pipe,
-                  :nginx_access_pipe,
                   :nginx_stdin,
                   :nginx_stdout,
                   :nginx_stderr,
@@ -50,16 +49,12 @@ module Bespoked
 
       self.nginx_stdout_pipe = @run_loop.pipe
       self.nginx_stderr_pipe = @run_loop.pipe
-      self.nginx_access_pipe = @run_loop.pipe
 
       @pipes << self.nginx_stdout_pipe
       @pipes << self.nginx_stderr_pipe
-      @pipes << self.nginx_access_pipe
 
       self.nginx_stdout_pipe.open(@nginx_stdout.fileno)
       self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
-      #TODO: fix access.log print
-      #self.nginx_access_pipe.open(@nginx_access_file.fileno)
 
       @nginx_stderr_pipe.progress do |data|
         @run_loop.log :nginx_stderr, data
@@ -70,11 +65,6 @@ module Bespoked
         @run_loop.log :nginx_stdout, data
       end
       @nginx_stdout_pipe.start_read
-
-      #@nginx_access_pipe.progress do |data|
-      #  @run_loop.log :nginx_access, data
-      #end
-      #@nginx_access_pipe.start_read
     end
 
     def halt(message)
