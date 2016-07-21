@@ -60,12 +60,12 @@ module Bespoked
       self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
 
       @nginx_stderr_pipe.progress do |data|
-        @run_loop.log :nginx_stderr, data
+        @run_loop.log :info, :nginx_stderr, data
       end
       @nginx_stderr_pipe.start_read
 
       @nginx_stdout_pipe.progress do |data|
-        @run_loop.log :nginx_stdout, data
+        @run_loop.log :info, :nginx_stdout, data
       end
       @nginx_stdout_pipe.start_read
     end
@@ -168,14 +168,28 @@ module Bespoked
         self.halt :no_ok_auth_failed
       end
 
+      proceed_to_emit_conf = self.install_heartbeat
+
       @run_loop.run do |logger|
-        logger.progress do |level, errorid, error|
-          p [level, errorid, error]
-          puts (error && error.respond_to?(:backtrace)) ? error.backtrace : nil
+        logger.progress do |level, type, message|
+          error_trace = (message && message.respond_to?(:backtrace)) ? message.backtrace : message
+          p [level, type, error_trace]
         end
 
-        @heartbeat = @run_loop.timer
-        self.install_nginx_pipes
+        @retry_timer = @run_loop.timer
+        @retry_timer.progress do
+          self.connect(proceed_to_emit_conf)
+        end
+        @retry_timer.start(0, 500)
+      end
+
+      p "run_loop_exited"
+    end
+
+    def install_heartbeat
+      @heartbeat = @run_loop.timer
+      defer = @run_loop.defer
+      defer.promise.then do
         @heartbeat.progress do
           @heartbeat.stop
           if ingress_descriptions = @descriptions["ingress"]
@@ -194,29 +208,23 @@ module Bespoked
             end
           end
         end
-
-        @retry_timer = @run_loop.timer
-        @retry_timer.progress do
-          self.connect
-        end
-        @retry_timer.start(0, 500)
       end
-
-      p "run_loop_exited"
+      self.install_nginx_pipes
+      return defer
     end
 
-    def connect
-      @run_loop.log(:info, :connect)
+    def connect(proceed)
       ing_ok = self.create_watch_pipe("ingresses")
       ser_ok = self.create_watch_pipe("services")
       pod_ok = self.create_watch_pipe("pods")
       @run_loop.finally(ing_ok, ser_ok, pod_ok).then do |deferred_auths|
-        auth_ok = deferred_auths.all? { |p, q| p }
+        auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
         @run_loop.log :info, :got_auth, auth_ok
 
         if auth_ok
           @retry_timer.stop
           @failed_to_auth_timeout.stop
+          proceed.resolve
         end
       end
     end
@@ -313,7 +321,8 @@ module Bespoked
     end
 
     def path_for_watch(kind)
-      path_prefix = "/%s/watch/namespaces/default/%s" #TODO: ?resourceVersion=0
+      #TODO: add resource very query support e.g. ?resourceVersion=0
+      path_prefix = "/%s/watch/namespaces/default/%s"
       path_for_watch = begin
         case kind
           when "pods"
@@ -340,26 +349,24 @@ module Bespoked
       if description
         kind = description["kind"]
         name = description["metadata"]["name"]
+        @run_loop.log :info, :event, [type, kind, name]
         case kind
           when "IngressList", "PodList", "ServiceList"
-            p [type, kind, name]
 
           when "Pod"
-            p [type, kind, name]
             self.register_pod(type, description)
 
           when "Service"
-            p [type, kind, name]
             self.register_service(type, description)
 
           when "Ingress"
-            p [type, kind, name]
             self.register_ingress(type, description)
 
         end
       end
 
-      @heartbeat.start(0, 100)
+      @heartbeat.stop
+      @heartbeat.start(100, 0)
     end
   end
 end
