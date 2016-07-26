@@ -1,10 +1,10 @@
 # Makefile for besoked installation
 
 #NOTE: override these at execution time
-REGISTRY_DOMAIN ?= mavenlink-maven-docker.jfrog.io
+REPO ?= docker.io
 IMAGE_NAME ?= mavenlink/bespoked
 IMAGE_TAG ?= $(strip $(shell find Gemfile Gemfile.lock lib config nginx kubernetes main.rb -type f | xargs shasum | sort | shasum | cut -f1 -d" "))
-IMAGE = $(REGISTRY_DOMAIN)/$(IMAGE_NAME):$(IMAGE_TAG)
+IMAGE = $(REPO)/$(IMAGE_NAME):$(IMAGE_TAG)
 
 BUILD=build
 
@@ -29,7 +29,7 @@ install: $(MANIFEST_TMP)
 	# kubectl rolling-update bespoked-replication-controller --image=$(IMAGE) --image-pull-policy=IfNotPresent --update-period=9s --poll-interval=3s
 
 $(MANIFEST_TMP): manifest.rb kubernetes/rc.yml $(BUILD)/$(IMAGE_TAG)
-	ruby manifest.rb $(REGISTRY_DOMAIN) $(IMAGE_NAME) $(IMAGE_TAG) > $(MANIFEST_TMP)
+	ruby manifest.rb $(REPO) $(IMAGE_NAME) $(IMAGE_TAG) > $(MANIFEST_TMP)
 
 uninstall:
 	kubectl delete -f $(MANIFEST_TMP)
