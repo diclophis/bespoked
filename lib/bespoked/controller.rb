@@ -2,7 +2,8 @@
 
 module Bespoked
   class Controller
-    attr_accessor :var_lib_k8s,
+    attr_accessor :run_dir,
+                  :var_lib_k8s,
                   :var_lib_k8s_host_to_app_dir,
                   :var_lib_k8s_app_to_alias_dir,
                   :var_lib_k8s_sites_dir,
@@ -10,9 +11,7 @@ module Bespoked
                   :descriptions,
                   :run_loop,
                   :pipes,
-                  :nginx_access_log_path,
                   :nginx_conf_path,
-                  :nginx_access_file,
                   :nginx_stdout_pipe,
                   :nginx_stderr_pipe,
                   :nginx_stdin,
@@ -21,11 +20,21 @@ module Bespoked
                   :nginx_process_waiter
 
     def initialize(options = {})
-      self.var_lib_k8s = options["var-lib-k8s"] || Dir.mktmpdir
-      self.var_lib_k8s_host_to_app_dir = File.join(@var_lib_k8s, "host_to_app") 
-      self.var_lib_k8s_app_to_alias_dir = File.join(@var_lib_k8s, "app_to_alias") 
-      self.var_lib_k8s_sites_dir = File.join(@var_lib_k8s, "sites")
-      self.var_lib_k8s_logs_dir = File.join(@var_lib_k8s, "logs")
+      self.run_dir = options["var-lib-k8s"] || Dir.mktmpdir
+      self.var_lib_k8s = File.join(@run_dir, "current")
+      self.descriptions = {}
+
+      self.run_loop = Libuv::Loop.default
+      self.pipes = []
+    end
+
+    def nginx_mkdir
+      version_dir = Dir.mktmpdir
+
+      self.var_lib_k8s_host_to_app_dir = File.join(version_dir, "host_to_app") 
+      self.var_lib_k8s_app_to_alias_dir = File.join(version_dir, "app_to_alias") 
+      self.var_lib_k8s_sites_dir = File.join(version_dir, "sites")
+      self.var_lib_k8s_logs_dir = File.join(version_dir, "logs")
 
       # create mapping conf.d dirs
       FileUtils.mkdir_p(@var_lib_k8s_host_to_app_dir)
@@ -33,21 +42,22 @@ module Bespoked
       FileUtils.mkdir_p(@var_lib_k8s_sites_dir)
       FileUtils.mkdir_p(@var_lib_k8s_logs_dir)
 
-      self.descriptions = {}
+      return version_dir
+    end
 
-      self.run_loop = Libuv::Loop.default
-      self.pipes = []
+    def nginx_install_version(version)
+      FileUtils.ln_sf(version, @var_lib_k8s)
     end
 
     # prepares nginx run loop
     def install_nginx_pipes
-      self.nginx_access_log_path = File.join(@var_lib_k8s, "access.log")
-      self.nginx_conf_path = File.join(@var_lib_k8s, "nginx.conf")
+      self.nginx_conf_path = File.join(@run_dir, "nginx.conf")
       local_nginx_conf = File.realpath(File.join(File.dirname(__FILE__), "../..", "nginx/empty.nginx.conf"))
       File.link(local_nginx_conf, @nginx_conf_path)
-      self.nginx_access_file = File.open(@nginx_access_log_path, File::CREAT|File::RDWR|File::APPEND)
 
-      combined = ["nginx", "-p", @var_lib_k8s, "-c", "nginx.conf", "-g", "pid #{@var_lib_k8s}/nginx.pid;"]
+      self.nginx_install_version(self.nginx_mkdir)
+
+      combined = ["nginx", "-p", @var_lib_k8s, "-c", "nginx.conf", "-g", "pid #{@run_dir}/nginx.pid;"]
       self.nginx_stdin, self.nginx_stdout, self.nginx_stderr, self.nginx_process_waiter = Open3.popen3(*combined)
 
       self.nginx_stdout_pipe = @run_loop.pipe
@@ -144,7 +154,7 @@ module Bespoked
     end
 
     def ingress
-      p @var_lib_k8s
+      p @run_dir
 
       @run_loop.signal(:INT) do |_sigint|
         self.halt :run_loop_interupted
@@ -247,6 +257,8 @@ module Bespoked
 
         map_name = [pod_name, app].join("-")
 
+        new_version = self.nginx_mkdir
+
         File.open(File.join(@var_lib_k8s_host_to_app_dir, map_name), "w+") do |f|
           f.write(host_to_app_line)
         end
@@ -258,6 +270,8 @@ module Bespoked
         File.open(File.join(@var_lib_k8s_sites_dir, map_name), "w+") do |f|
           f.write(site_config)
         end
+
+        self.nginx_install_version(new_version)
       end
     end
 
