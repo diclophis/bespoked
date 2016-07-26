@@ -60,12 +60,12 @@ module Bespoked
       self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
 
       @nginx_stderr_pipe.progress do |data|
-        @run_loop.log :nginx_stderr, data
+        @run_loop.log :info, :nginx_stderr, data
       end
       @nginx_stderr_pipe.start_read
 
       @nginx_stdout_pipe.progress do |data|
-        @run_loop.log :nginx_stdout, data
+        @run_loop.log :info, :nginx_stdout, data
       end
       @nginx_stdout_pipe.start_read
     end
@@ -78,9 +78,8 @@ module Bespoked
         end
         @nginx_process_waiter.join
       end
+      @run_loop.log(:info, :halt, message)
       @run_loop.stop
-      p message
-      #exit 1
     end
 
     def create_watch_pipe(resource_kind)
@@ -89,19 +88,17 @@ module Bespoked
       service_host = ENV["KUBERNETES_SERVICE_HOST"] || self.halt("KUBERNETES_SERVICE_HOST missing")
       service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || self.halt("KUBERNETES_SERVICE_PORT_HTTPS missing")
       bearer_token = ENV["KUBERNETES_DEV_BEARER_TOKEN"] || begin
-         until File.exist?(var_run_secrets_k8s_token_path) && (File.size(var_run_secrets_k8s_token_path) > 0)
-           p :k8s_token_not_ready
-           sleep 1
+         unless File.exist?(var_run_secrets_k8s_token_path) && (File.size(var_run_secrets_k8s_token_path) > 0)
+           self.halt :k8s_token_not_ready
          end
 
          File.read(var_run_secrets_k8s_token_path).strip
       end
 
-      p [:bearer_token, bearer_token]
-
       get_watch = "GET #{self.path_for_watch(resource_kind)} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: */*\r\nUser-Agent: bespoked\r\n\r\n"
 
       client = @run_loop.tcp
+      defer = @run_loop.defer
 
       http_parser = Http::Parser.new
 
@@ -111,13 +108,17 @@ module Bespoked
       end
 
       http_parser.on_headers_complete = proc do
-        #p [resource_kind, http_parser.headers]
-        #TODO: raise on incompat stream format
+        http_ok = http_parser.status_code.to_i == 200
+        defer.resolve(http_ok)
       end
 
       http_parser.on_body = proc do |chunk|
         # One chunk of the body
-        json_parser << chunk
+        begin
+          json_parser << chunk
+        rescue Yajl::ParseError => bad_json
+          @run_loop.log(:error, :bad_json, [bad_json, chunk])
+        end
       end
 
       http_parser.on_message_complete = proc do |env|
@@ -138,6 +139,8 @@ module Bespoked
 
         client.start_read
       end
+
+      return defer.promise
     end
 
     def ingress
@@ -159,45 +162,71 @@ module Bespoked
         self.halt :run_loop_terminated
       end
 
+      @failed_to_auth_timeout = @run_loop.timer
+      @failed_to_auth_timeout.start(5000, 0)
+      @failed_to_auth_timeout.progress do
+        self.halt :no_ok_auth_failed
+      end
+
+      proceed_to_emit_conf = self.install_heartbeat
+
       @run_loop.run do |logger|
-        logger.progress do |level, errorid, error|
-          p [level, errorid, error]
-          puts error ? error.backtrace : nil
+        logger.progress do |level, type, message|
+          error_trace = (message && message.respond_to?(:backtrace)) ? message.backtrace : message
+          p [level, type, error_trace]
         end
-      
-        self.create_watch_pipe("ingresses")
-        self.create_watch_pipe("services")
-        self.create_watch_pipe("pods")
 
-        self.install_nginx_pipes
+        @retry_timer = @run_loop.timer
+        @retry_timer.progress do
+          self.connect(proceed_to_emit_conf)
+        end
+        @retry_timer.start(0, 500)
+      end
 
-        @heartbeat = @run_loop.timer
+      p "run_loop_exited"
+    end
+
+    def install_heartbeat
+      @heartbeat = @run_loop.timer
+      defer = @run_loop.defer
+      defer.promise.then do
         @heartbeat.progress do
-          if @run_loop.reactor_running?
-            if ingress_descriptions = @descriptions["ingress"]
-              ingress_descriptions.values.each do |ingress_description|
-                vhosts_for_ingress = self.extract_vhosts(ingress_description)
-                vhosts_for_ingress.each do |pod, *vhosts_for_pod|
-                  p [Time.now] + vhosts_for_pod
-                  pod_name = self.extract_name(pod)
-                  self.install_vhosts(pod_name, [vhosts_for_pod])
-                  begin
-                    Process.kill("HUP", @nginx_process_waiter.pid)
-                  rescue Errno::ESRCH => no_child
-                    p [:no_child, @nginx_process_waiter.pid]
-                  end
+          @heartbeat.stop
+          if ingress_descriptions = @descriptions["ingress"]
+            ingress_descriptions.values.each do |ingress_description|
+              vhosts_for_ingress = self.extract_vhosts(ingress_description)
+              vhosts_for_ingress.each do |pod, *vhosts_for_pod|
+                @run_loop.log(:info, :heartbeat, vhosts_for_pod)
+                pod_name = self.extract_name(pod)
+                self.install_vhosts(pod_name, [vhosts_for_pod])
+                begin
+                  Process.kill("HUP", @nginx_process_waiter.pid)
+                rescue Errno::ESRCH => no_child
+                  @run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
                 end
               end
             end
           end
-
-          @heartbeat.stop
         end
-
-        @run_loop.log :info, :run_loop_started
       end
+      self.install_nginx_pipes
+      return defer
+    end
 
-      p "run_loop_exited"
+    def connect(proceed)
+      ing_ok = self.create_watch_pipe("ingresses")
+      ser_ok = self.create_watch_pipe("services")
+      pod_ok = self.create_watch_pipe("pods")
+      @run_loop.finally(ing_ok, ser_ok, pod_ok).then do |deferred_auths|
+        auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
+        @run_loop.log :info, :got_auth, auth_ok
+
+        if auth_ok
+          @retry_timer.stop
+          @failed_to_auth_timeout.stop
+          proceed.resolve
+        end
+      end
     end
 
     def install_vhosts(pod_name, vhosts)
@@ -292,7 +321,8 @@ module Bespoked
     end
 
     def path_for_watch(kind)
-      path_prefix = "/%s/watch/namespaces/default/%s" #TODO: ?resourceVersion=0
+      #TODO: add resource very query support e.g. ?resourceVersion=0
+      path_prefix = "/%s/watch/namespaces/default/%s"
       path_for_watch = begin
         case kind
           when "pods"
@@ -309,7 +339,6 @@ module Bespoked
         end
       end
 
-      # curl --cacert kubernetes/ca.crt -v -XGET -H "Authorization: Bearer $(cat kubernetes/api.token)" -H "Accept: application/json, */*" -H "User-Agent: kubectl/v1.3.0 (linux/amd64) kubernetes/2831379" https://192.168.84.10:8443/apis/extensions/v1beta1/watch/namespaces/default/ingresses?resourceVersion=0
       path_for_watch
     end
 
@@ -320,26 +349,24 @@ module Bespoked
       if description
         kind = description["kind"]
         name = description["metadata"]["name"]
+        @run_loop.log :info, :event, [type, kind, name]
         case kind
           when "IngressList", "PodList", "ServiceList"
-            p [type, kind, name]
 
           when "Pod"
-            p [type, kind, name]
             self.register_pod(type, description)
 
           when "Service"
-            p [type, kind, name]
             self.register_service(type, description)
 
           when "Ingress"
-            p [type, kind, name]
             self.register_ingress(type, description)
 
         end
       end
 
-      @heartbeat.start(0, 1000)
+      @heartbeat.stop
+      @heartbeat.start(100, 0)
     end
   end
 end
