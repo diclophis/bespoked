@@ -17,67 +17,113 @@ module Bespoked
                   :nginx_stdin,
                   :nginx_stdout,
                   :nginx_stderr,
-                  :nginx_process_waiter
+                  :nginx_process_waiter,
+                  :filesystem,
+                  :version_dir,
+                  :version
 
     def initialize(options = {})
+      self.version = 0
       self.run_dir = options["var-lib-k8s"] || Dir.mktmpdir
       self.var_lib_k8s = File.join(@run_dir, "current")
       self.descriptions = {}
 
       self.run_loop = Libuv::Loop.default
+      self.filesystem = @run_loop.filesystem
       self.pipes = []
     end
 
     def nginx_mkdir
-      version_dir = Dir.mktmpdir
+      defer = @run_loop.defer
 
-      self.var_lib_k8s_host_to_app_dir = File.join(version_dir, "host_to_app") 
-      self.var_lib_k8s_app_to_alias_dir = File.join(version_dir, "app_to_alias") 
-      self.var_lib_k8s_sites_dir = File.join(version_dir, "sites")
-      self.var_lib_k8s_logs_dir = File.join(version_dir, "logs")
+      @version += 1
 
-      # create mapping conf.d dirs
-      FileUtils.mkdir_p(@var_lib_k8s_host_to_app_dir)
-      FileUtils.mkdir_p(@var_lib_k8s_app_to_alias_dir)
-      FileUtils.mkdir_p(@var_lib_k8s_sites_dir)
-      FileUtils.mkdir_p(@var_lib_k8s_logs_dir)
+      self.version_dir = File.join(@run_dir, (@version).to_s) # old Dir.mktmpdir #NOTE: this is outside the runloop....!
+      self.var_lib_k8s_host_to_app_dir = File.join(@version_dir, "host_to_app") 
+      self.var_lib_k8s_app_to_alias_dir = File.join(@version_dir, "app_to_alias") 
+      self.var_lib_k8s_sites_dir = File.join(@version_dir, "sites")
+      self.var_lib_k8s_logs_dir = File.join(@version_dir, "logs")
 
-      return version_dir
+      @run_loop.finally(@filesystem.mkdir(@version_dir)).then do
+        @filesystem.mkdir(@var_lib_k8s_host_to_app_dir).then do
+          @filesystem.mkdir(@var_lib_k8s_app_to_alias_dir).then do
+            @filesystem.mkdir(@var_lib_k8s_logs_dir).then do
+              @filesystem.mkdir(@var_lib_k8s_sites_dir).then do
+                defer.resolve(@version_dir)
+              end
+            end
+          end
+        end
+      end
+
+      return defer.promise
     end
 
-    def nginx_install_version(version)
-      FileUtils.ln_sf(version, @var_lib_k8s)
+    def nginx_install_version
+      defer = @run_loop.defer
+
+      @last_lstat = @filesystem.lstat(@var_lib_k8s)
+
+      proceed = proc {
+        @filesystem.rename(@version_dir, @var_lib_k8s).then do
+          defer.resolve(true)
+        end
+      }
+
+      lstat_failed = proc { |reason|
+        @run_loop.log :info, :ignore_current_lstat_failed, reason
+        proceed.call
+      }
+
+      proceed_with_current_to_last_rename = proc {
+        rename_current_failed = proc { |reason|
+          @run_loop.log :error, :rename_current_to_last_failed, reason
+        }
+
+        @filesystem.rename(@var_lib_k8s, File.join(@run_dir, "last-version-before-" + @version.to_s)).then(nil, rename_current_failed) do
+          proceed.call
+        end
+      }
+
+      @last_lstat.then(nil, lstat_failed) do
+        proceed_with_current_to_last_rename.call
+      end
+
+      return defer.promise
     end
 
     # prepares nginx run loop
     def install_nginx_pipes
       self.nginx_conf_path = File.join(@run_dir, "nginx.conf")
       local_nginx_conf = File.realpath(File.join(File.dirname(__FILE__), "../..", "nginx/empty.nginx.conf"))
+
       File.link(local_nginx_conf, @nginx_conf_path)
 
-      self.nginx_install_version(self.nginx_mkdir)
+      self.nginx_mkdir.then do |new_version|
+        self.nginx_install_version.then do
+          combined = ["nginx", "-p", @run_dir, "-c", "nginx.conf", "-g", "pid #{@run_dir}/nginx.pid;"]
+          self.nginx_stdin, self.nginx_stdout, self.nginx_stderr, self.nginx_process_waiter = Open3.popen3(*combined)
 
-      combined = ["nginx", "-p", @var_lib_k8s, "-c", "nginx.conf", "-g", "pid #{@run_dir}/nginx.pid;"]
-      self.nginx_stdin, self.nginx_stdout, self.nginx_stderr, self.nginx_process_waiter = Open3.popen3(*combined)
+          self.nginx_stdout_pipe = @run_loop.pipe
+          self.nginx_stderr_pipe = @run_loop.pipe
 
-      self.nginx_stdout_pipe = @run_loop.pipe
-      self.nginx_stderr_pipe = @run_loop.pipe
+          @pipes << self.nginx_stdout_pipe
+          @pipes << self.nginx_stderr_pipe
 
-      @pipes << self.nginx_stdout_pipe
-      @pipes << self.nginx_stderr_pipe
+          self.nginx_stdout_pipe.open(@nginx_stdout.fileno)
+          self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
 
-      self.nginx_stdout_pipe.open(@nginx_stdout.fileno)
-      self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
+          @nginx_stderr_pipe.progress do |data|
+            @run_loop.log :info, :nginx_stderr, data
+          end
+          @nginx_stderr_pipe.start_read
 
-      @nginx_stderr_pipe.progress do |data|
-        @run_loop.log :info, :nginx_stderr, data
+          @nginx_stdout_pipe.progress do |data|
+            @run_loop.log :info, :nginx_stdout, data
+          end
+          @nginx_stdout_pipe.start_read
+        end
       end
-      @nginx_stderr_pipe.start_read
-
-      @nginx_stdout_pipe.progress do |data|
-        @run_loop.log :info, :nginx_stdout, data
-      end
-      @nginx_stdout_pipe.start_read
     end
 
     def halt(message)
@@ -181,9 +227,9 @@ module Bespoked
       proceed_to_emit_conf = self.install_heartbeat
 
       @run_loop.run do |logger|
-        logger.progress do |level, type, message|
-          error_trace = (message && message.respond_to?(:backtrace)) ? message.backtrace : message
-          p [level, type, error_trace]
+        logger.progress do |level, type, message, wtf|
+          error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
+          p [:log_progress, level, type, error_trace, wtf]
         end
 
         @retry_timer = @run_loop.timer
@@ -203,12 +249,9 @@ module Bespoked
         @heartbeat.progress do
           @heartbeat.stop
           if ingress_descriptions = @descriptions["ingress"]
-            ingress_descriptions.values.each do |ingress_description|
-              vhosts_for_ingress = self.extract_vhosts(ingress_description)
-              vhosts_for_ingress.each do |pod, *vhosts_for_pod|
-                @run_loop.log(:info, :heartbeat, vhosts_for_pod)
-                pod_name = self.extract_name(pod)
-                self.install_vhosts(pod_name, [vhosts_for_pod])
+            self.nginx_mkdir.then do
+              self.install_vhosts(ingress_descriptions)
+              self.nginx_install_version.then do
                 begin
                   Process.kill("HUP", @nginx_process_waiter.pid)
                 rescue Errno::ESRCH => no_child
@@ -219,7 +262,9 @@ module Bespoked
           end
         end
       end
+
       self.install_nginx_pipes
+
       return defer
     end
 
@@ -239,7 +284,7 @@ module Bespoked
       end
     end
 
-    def install_vhosts(pod_name, vhosts)
+    def install_vhosts(ingress_descriptions)
       host_to_app_template = "%s %s;\n"
       app_to_alias_template = "%s %s;\n"
       default_alias = "/dev/null/"
@@ -250,28 +295,30 @@ module Bespoked
         }
       EOF_NGINX_SITE_TEMPLATE
 
-      vhosts.each do |host, app, upstream|
-        host_to_app_line = host_to_app_template % [host, app]
-        app_to_alias_line = app_to_alias_template % [app, default_alias]
-        site_config = site_template % [app, upstream]
+      ingress_descriptions.values.each do |ingress_description|
+        vhosts_for_ingress = self.extract_vhosts(ingress_description)
+        vhosts_for_ingress.each do |pod, host, app, upstream|
+          pod_name = self.extract_name(pod)
+          host_to_app_line = host_to_app_template % [host, app]
+          app_to_alias_line = app_to_alias_template % [app, default_alias]
+          site_config = site_template % [app, upstream]
+          map_name = [pod_name, app].join("-")
 
-        map_name = [pod_name, app].join("-")
+          #TODO: make this use async io
+          File.open(File.join(@var_lib_k8s_host_to_app_dir, map_name), "w+") do |f|
+            f.write(host_to_app_line)
+          end
 
-        new_version = self.nginx_mkdir
+          File.open(File.join(@var_lib_k8s_app_to_alias_dir, map_name), "w+") do |f|
+            f.write(app_to_alias_line)
+          end
 
-        File.open(File.join(@var_lib_k8s_host_to_app_dir, map_name), "w+") do |f|
-          f.write(host_to_app_line)
+          File.open(File.join(@var_lib_k8s_sites_dir, map_name), "w+") do |f|
+            f.write(site_config)
+          end
+
+          @run_loop.log(:info, :installing_ingress, [pod_name, host, app, upstream])
         end
-
-        File.open(File.join(@var_lib_k8s_app_to_alias_dir, map_name), "w+") do |f|
-          f.write(app_to_alias_line)
-        end
-
-        File.open(File.join(@var_lib_k8s_sites_dir, map_name), "w+") do |f|
-          f.write(site_config)
-        end
-
-        self.nginx_install_version(new_version)
       end
     end
 
