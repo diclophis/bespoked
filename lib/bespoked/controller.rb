@@ -139,10 +139,32 @@ module Bespoked
     end
 
     def create_watch_pipe(resource_kind)
+      defer = @run_loop.defer
+
+      reconnect_timer = @run_loop.timer
+
+      proceed_with_reconnect = proc {
+        reconnect_timer.stop
+        reconnect_timer.start(100, 0)
+      }
+
+      reconnect_timer.progress do
+        reconnect_loop = self.create_retry_watch(resource_kind, defer)
+        reconnect_loop.then do
+          proceed_with_reconnect.call
+        end
+      end
+
+      proceed_with_reconnect.call
+
+      return defer.promise
+    end
+
+    def create_retry_watch(resource_kind, defer)
       var_run_secrets_k8s_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
 
-      service_host = ENV["KUBERNETES_SERVICE_HOST"] || self.halt("KUBERNETES_SERVICE_HOST missing")
-      service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || self.halt("KUBERNETES_SERVICE_PORT_HTTPS missing")
+      service_host = ENV["KUBERNETES_SERVICE_HOST"] || "127.0.0.1"
+      service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || "8443"
       bearer_token = ENV["KUBERNETES_DEV_BEARER_TOKEN"] || begin
          unless File.exist?(var_run_secrets_k8s_token_path) && (File.size(var_run_secrets_k8s_token_path) > 0)
            self.halt :k8s_token_not_ready
@@ -153,8 +175,8 @@ module Bespoked
 
       get_watch = "GET #{self.path_for_watch(resource_kind)} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: */*\r\nUser-Agent: bespoked\r\n\r\n"
 
-      client = @run_loop.tcp
-      defer = @run_loop.defer
+      new_client = @run_loop.tcp
+      retry_defer = @run_loop.defer
 
       http_parser = Http::Parser.new
 
@@ -163,13 +185,14 @@ module Bespoked
         self.handle_event(event)
       end
 
+      # HTTP headers available
       http_parser.on_headers_complete = proc do
         http_ok = http_parser.status_code.to_i == 200
         defer.resolve(http_ok)
       end
 
+      # One chunk of the body
       http_parser.on_body = proc do |chunk|
-        # One chunk of the body
         begin
           json_parser << chunk
         rescue Yajl::ParseError => bad_json
@@ -177,13 +200,13 @@ module Bespoked
         end
       end
 
+      # Headers and body is all parsed
       http_parser.on_message_complete = proc do |env|
-        # Headers and body is all parsed
-        #TODO: restart watch on disconnect
+        #TODO: @run_loop.log(:info, :on_message_completed, [])
       end
 
-      client.connect(service_host, service_port.to_i) do |client|
-        client.start_tls({:server => false, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
+      new_client.connect(service_host, service_port.to_i) do |client|
+        client.start_tls({:server => false}) #, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
 
         client.progress do |data|
           http_parser << data
@@ -193,10 +216,21 @@ module Bespoked
           client.write(get_watch)
         end
 
-        client.start_read
+        client.finally do |fin|
+          retry_defer.resolve(true)
+        end
       end
 
-      return defer.promise
+      new_client.catch do |err|
+        #NOTE: if the connection refuses, retry the connection
+        if err.is_a?(Libuv::Error::ECONNREFUSED)
+          retry_defer.resolve(true)
+        end
+      end
+
+      new_client.start_read
+
+      return retry_defer.promise
     end
 
     def ingress
