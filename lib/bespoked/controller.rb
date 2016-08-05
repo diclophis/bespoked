@@ -263,7 +263,7 @@ module Bespoked
       @run_loop.run do |logger|
         logger.progress do |level, type, message, wtf|
           error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
-          p [:log_progress, level, type, error_trace, wtf]
+          p Yajl::Encoder.encode([Time.now, level, type, error_trace, wtf])
         end
 
         @retry_timer = @run_loop.timer
