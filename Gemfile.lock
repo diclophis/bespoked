@@ -1,15 +1,21 @@
-GEM
-  remote: https://rubygems.org/
+GIT
+  remote: git@github.com:mavenlink/libuv.git
+  revision: f3bdde6ce47c60b06855ae2becabe74ee1bc6444
+  branch: fix-error-trap-in-timer
   specs:
-    ffi (1.9.13)
-    ffi-compiler (1.0.1)
-      ffi (>= 1.0.0)
-      rake
-    http_parser.rb (0.6.0)
     libuv (2.0.8)
       ffi (>= 1.9)
       ruby-tls (>= 2.0.0)
       thread_safe
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    ffi (1.9.14)
+    ffi-compiler (1.0.1)
+      ffi (>= 1.0.0)
+      rake
+    http_parser.rb (0.6.0)
     minitest (5.7.0)
     rake (11.2.2)
     ruby-tls (2.1.2)
@@ -23,6 +29,6 @@ PLATFORMS
 
 DEPENDENCIES
   http_parser.rb
-  libuv
+  libuv!
   minitest (= 5.7.0)
   yajl-ruby
