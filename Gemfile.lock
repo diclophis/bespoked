@@ -1,5 +1,5 @@
 GIT
-  remote: git@github.com:mavenlink/libuv.git
+  remote: https://github.com/mavenlink/libuv.git
   revision: f3bdde6ce47c60b06855ae2becabe74ee1bc6444
   branch: fix-error-trap-in-timer
   specs:

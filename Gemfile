@@ -4,7 +4,7 @@ source 'https://rubygems.org'
 gem 'yajl-ruby'
 
 # Ruby bindings for libuv
-gem 'libuv', :git => "git@github.com:mavenlink/libuv.git", :branch => "fix-error-trap-in-timer"
+gem 'libuv', :git => "https://github.com/mavenlink/libuv.git", :branch => "fix-error-trap-in-timer"
 
 # simple callback-based HTTP request/response parser
 gem 'http_parser.rb'
