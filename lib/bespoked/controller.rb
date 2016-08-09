@@ -22,6 +22,9 @@ module Bespoked
                   :version_dir,
                   :version
 
+    RECONNECT_WAIT = 1000
+    RECONNECT_TRIES = 60
+
     def initialize(options = {})
       self.version = 0
       self.run_dir = options["var-lib-k8s"] || Dir.mktmpdir
@@ -145,7 +148,7 @@ module Bespoked
 
       proceed_with_reconnect = proc {
         reconnect_timer.stop
-        reconnect_timer.start(100, 0)
+        reconnect_timer.start(RECONNECT_WAIT, 0)
       }
 
       reconnect_timer.progress do
@@ -188,6 +191,7 @@ module Bespoked
       # HTTP headers available
       http_parser.on_headers_complete = proc do
         http_ok = http_parser.status_code.to_i == 200
+        @run_loop.log(:warn, :got_watch_headers, [http_ok])
         defer.resolve(http_ok)
       end
 
@@ -202,11 +206,12 @@ module Bespoked
 
       # Headers and body is all parsed
       http_parser.on_message_complete = proc do |env|
-        #TODO: @run_loop.log(:info, :on_message_completed, [])
+        @run_loop.log(:info, :on_message_completed, [])
       end
 
       new_client.connect(service_host, service_port.to_i) do |client|
-        client.start_tls({:server => false}) #, :verify_peer => false, :cert_chain => "kubernetes/ca.crt"})
+        client.enable_keepalive(10) #NOTE: TCP keep-alive circuot
+        client.start_tls({:server => false})
 
         client.progress do |data|
           http_parser << data
@@ -216,13 +221,15 @@ module Bespoked
           client.write(get_watch)
         end
 
-        client.finally do |fin|
+        client.finally do |finish|
+          @run_loop.log(:warn, :watch_disconnected, finish)
           retry_defer.resolve(true)
         end
       end
 
       new_client.catch do |err|
         #NOTE: if the connection refuses, retry the connection
+        @run_loop.log(:warn, :watch_client_error, err)
         if err.is_a?(Libuv::Error::ECONNREFUSED)
           retry_defer.resolve(true)
         end
@@ -253,7 +260,7 @@ module Bespoked
       end
 
       @failed_to_auth_timeout = @run_loop.timer
-      @failed_to_auth_timeout.start(5000, 0)
+      @failed_to_auth_timeout.start(RECONNECT_WAIT * RECONNECT_TRIES, 0)
       @failed_to_auth_timeout.progress do
         self.halt :no_ok_auth_failed
       end
@@ -261,16 +268,16 @@ module Bespoked
       proceed_to_emit_conf = self.install_heartbeat
 
       @run_loop.run do |logger|
-        logger.progress do |level, type, message, wtf|
+        logger.progress do |level, type, message, _not_used|
           error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
-          p Yajl::Encoder.encode([Time.now, level, type, error_trace, wtf])
+          p Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace})
         end
 
         @retry_timer = @run_loop.timer
         @retry_timer.progress do
           self.connect(proceed_to_emit_conf)
         end
-        @retry_timer.start(0, 500)
+        @retry_timer.start(0, (RECONNECT_WAIT * 2))
       end
 
       p "run_loop_exited"
