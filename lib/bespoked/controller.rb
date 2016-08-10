@@ -241,8 +241,6 @@ module Bespoked
     end
 
     def ingress
-      p @run_dir
-
       @run_loop.signal(:INT) do |_sigint|
         self.halt :run_loop_interupted
       end
@@ -268,9 +266,15 @@ module Bespoked
       proceed_to_emit_conf = self.install_heartbeat
 
       @run_loop.run do |logger|
+        @stdout_pipe = @run_loop.pipe
+        @stdout_pipe.open($stdout.fileno)
+
+        @run_loop.log(:info, :run_dir, @run_dir)
+
         logger.progress do |level, type, message, _not_used|
           error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
-          p Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace})
+          @stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
+          @stdout_pipe.write($/)
         end
 
         @retry_timer = @run_loop.timer
@@ -279,8 +283,6 @@ module Bespoked
         end
         @retry_timer.start(0, (RECONNECT_WAIT * 2))
       end
-
-      p "run_loop_exited"
     end
 
     def install_heartbeat
