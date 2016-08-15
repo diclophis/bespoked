@@ -22,7 +22,7 @@ module Bespoked
                   :version_dir,
                   :version
 
-    RECONNECT_WAIT = 1000
+    RECONNECT_WAIT = 5000
     RECONNECT_TRIES = 60
 
     def initialize(options = {})
@@ -165,6 +165,7 @@ module Bespoked
 
     def create_retry_watch(resource_kind, defer)
       var_run_secrets_k8s_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
+      var_run_secrets_k8s_crt_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
 
       service_host = ENV["KUBERNETES_SERVICE_HOST"] || "127.0.0.1"
       service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || "8443"
@@ -210,14 +211,14 @@ module Bespoked
       end
 
       new_client.connect(service_host, service_port.to_i) do |client|
-        client.enable_keepalive(10) #NOTE: TCP keep-alive circuot
-        client.start_tls({:server => false})
+        client.start_tls({:server => false, :cert_chain => var_run_secrets_k8s_crt_path})
 
         client.progress do |data|
           http_parser << data
         end
 
         client.on_handshake do
+          client.enable_keepalive(10) #NOTE: TCP keep-alive circuot
           client.write(get_watch)
         end
 
