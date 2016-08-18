@@ -278,33 +278,33 @@ module Bespoked
           @stdout_pipe.write($/)
         end
 
-        @retry_timer = @run_loop.timer
-        @retry_timer.progress do
+        #@retry_timer = @run_loop.timer
+        #@retry_timer.progress do
           self.connect(proceed_to_emit_conf)
-        end
-        @retry_timer.start(0, (RECONNECT_WAIT * 2))
+        #end
+        #@retry_timer.start(0, (RECONNECT_WAIT * 2))
       end
     end
 
     def install_heartbeat
       @heartbeat = @run_loop.timer
+
+@heartbeat.progress do
+  if ingress_descriptions = @descriptions["ingress"]
+    self.nginx_mkdir.then do
+      self.install_vhosts(ingress_descriptions)
+      self.nginx_install_version.then do
+	begin
+	  Process.kill("HUP", @nginx_process_waiter.pid)
+	rescue Errno::ESRCH => no_child
+	  @run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
+	end
+      end
+    end
+  end
+end
       defer = @run_loop.defer
       defer.promise.then do
-        @heartbeat.progress do
-          @heartbeat.stop
-          if ingress_descriptions = @descriptions["ingress"]
-            self.nginx_mkdir.then do
-              self.install_vhosts(ingress_descriptions)
-              self.nginx_install_version.then do
-                begin
-                  Process.kill("HUP", @nginx_process_waiter.pid)
-                rescue Errno::ESRCH => no_child
-                  @run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
-                end
-              end
-            end
-          end
-        end
       end
 
       self.install_nginx_pipes
@@ -321,7 +321,7 @@ module Bespoked
         @run_loop.log :info, :got_auth, auth_ok
 
         if auth_ok
-          @retry_timer.stop
+          #@retry_timer.stop
           @failed_to_auth_timeout.stop
           proceed.resolve
         end
@@ -413,8 +413,10 @@ module Bespoked
               if pod = self.locate_pod(pod_name)
                 if status = pod["status"]
                   pod_ip = status["podIP"]
-                  service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
-                  vhosts << [pod, rule_host, service_name, service_port]
+                  if pod_ip && pod_ip.strip.length > 0
+                    service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
+                    vhosts << [pod, rule_host, service_name, service_port]
+                  end
                 end
               end
             end
@@ -470,7 +472,7 @@ module Bespoked
         end
       end
 
-      @heartbeat.stop
+      #@heartbeat.stop
       @heartbeat.start(100, 0)
     end
   end
