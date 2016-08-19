@@ -168,7 +168,7 @@ module Bespoked
       var_run_secrets_k8s_crt_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
 
       service_host = ENV["KUBERNETES_SERVICE_HOST"] || "127.0.0.1"
-      service_port = ENV["KUBERNETES_SERVICE_PORT_HTTPS"] || "8443"
+      service_port = ENV["KUBERNETES_SERVICE_PORT"] || "8443"
       bearer_token = ENV["KUBERNETES_DEV_BEARER_TOKEN"] || begin
          unless File.exist?(var_run_secrets_k8s_token_path) && (File.size(var_run_secrets_k8s_token_path) > 0)
            self.halt :k8s_token_not_ready
