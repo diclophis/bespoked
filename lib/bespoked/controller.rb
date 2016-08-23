@@ -117,12 +117,12 @@ module Bespoked
           self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
 
           @nginx_stderr_pipe.progress do |data|
-            @run_loop.log :info, :nginx_stderr, data
+            #@run_loop.log :info, :nginx_stderr, data
           end
           @nginx_stderr_pipe.start_read
 
           @nginx_stdout_pipe.progress do |data|
-            @run_loop.log :info, :nginx_stdout, data
+            #@run_loop.log :info, :nginx_stdout, data
           end
           @nginx_stdout_pipe.start_read
         end
@@ -192,12 +192,13 @@ module Bespoked
       # HTTP headers available
       http_parser.on_headers_complete = proc do
         http_ok = http_parser.status_code.to_i == 200
-        @run_loop.log(:warn, :got_watch_headers, [http_ok])
+        #@run_loop.log(:warn, :got_watch_headers, [http_ok])
         defer.resolve(http_ok)
       end
 
       # One chunk of the body
       http_parser.on_body = proc do |chunk|
+        #@run_loop.log(:debug, :chunk, [chunk])
         begin
           json_parser << chunk
         rescue Yajl::ParseError => bad_json
@@ -207,7 +208,7 @@ module Bespoked
 
       # Headers and body is all parsed
       http_parser.on_message_complete = proc do |env|
-        @run_loop.log(:info, :on_message_completed, [])
+        #@run_loop.log(:info, :on_message_completed, [])
       end
 
       new_client.connect(service_host, service_port.to_i) do |client|
@@ -317,9 +318,10 @@ module Bespoked
       ing_ok = self.create_watch_pipe("ingresses")
       ser_ok = self.create_watch_pipe("services")
       pod_ok = self.create_watch_pipe("pods")
-      @run_loop.finally(ing_ok, ser_ok, pod_ok).then do |deferred_auths|
+      end_ok = self.create_watch_pipe("endpoints")
+      @run_loop.finally(ing_ok, ser_ok, pod_ok, end_ok).then do |deferred_auths|
         auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
-        @run_loop.log :info, :got_auth, auth_ok
+        #@run_loop.log :info, :got_auth, auth_ok
 
         if auth_ok
           @retry_timer.stop
@@ -336,38 +338,52 @@ module Bespoked
 
       site_template = <<-EOF_NGINX_SITE_TEMPLATE
         upstream %s {
-          server %s fail_timeout=0;
+          %s
         }
       EOF_NGINX_SITE_TEMPLATE
 
+      upstream_template = <<-EOF_NGINX_UPSTREAM_TEMPLATE
+          server %s fail_timeout=0;
+      EOF_NGINX_UPSTREAM_TEMPLATE
+
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
-        vhosts_for_ingress.each do |pod, host, app, upstream|
-          pod_name = self.extract_name(pod)
-          host_to_app_line = host_to_app_template % [host, app]
-          app_to_alias_line = app_to_alias_template % [app, default_alias]
-          site_config = site_template % [app, upstream]
-          map_name = [pod_name, app].join("-")
+        vhosts_for_ingress.each do |host, service_name, upstreams|
+          #pod_name = self.extract_name(pod)
+          host_to_app_line = host_to_app_template % [host, service_name]
+          app_to_alias_line = app_to_alias_template % [service_name, default_alias]
+          upstream_lines = upstreams.collect { |upstream|
+            upstream_template % [upstream]
+          }
+          site_config = site_template % [service_name, upstream_lines.join("\n")]
+          map_name = service_name
 
-          #TODO: make this use async io
-          File.open(File.join(@var_lib_k8s_host_to_app_dir, map_name), "w+") do |f|
-            f.write(host_to_app_line)
+          if Dir.exists?(@var_lib_k8s_host_to_app_dir) &&
+             Dir.exists?(@var_lib_k8s_app_to_alias_dir) &&
+             Dir.exists?(@var_lib_k8s_sites_dir) then
+
+            #TODO: make this use async io
+            File.open(File.join(@var_lib_k8s_host_to_app_dir, map_name), "w+") do |f|
+              f.write(host_to_app_line)
+            end
+
+            File.open(File.join(@var_lib_k8s_app_to_alias_dir, map_name), "w+") do |f|
+              f.write(app_to_alias_line)
+            end
+
+            File.open(File.join(@var_lib_k8s_sites_dir, map_name), "w+") do |f|
+              f.write(site_config)
+            end
+
+            @run_loop.log(:info, :installing_ingress, [host, service_name, upstreams])
+          else
+            @run_loop.log(:info, :missing_map_dirs, [host, service_name, upstreams])
           end
-
-          File.open(File.join(@var_lib_k8s_app_to_alias_dir, map_name), "w+") do |f|
-            f.write(app_to_alias_line)
-          end
-
-          File.open(File.join(@var_lib_k8s_sites_dir, map_name), "w+") do |f|
-            f.write(site_config)
-          end
-
-          @run_loop.log(:info, :installing_ingress, [pod_name, host, app, upstream])
         end
       end
     end
 
-    KINDS = ["pod", "service", "ingress"]
+    KINDS = ["pod", "service", "ingress", "endpoint"]
     KINDS.each do |kind|
       register_method = "register_#{kind}"
       locate_method = "locate_#{kind}"
@@ -409,18 +425,41 @@ module Bespoked
         if http = rule["http"]
           http["paths"].each do |http_path|
             service_name = http_path["backend"]["serviceName"]
-            if service = self.locate_service(service_name)
-              pod_name = service["spec"]["selector"]["name"]
-              if pod = self.locate_pod(pod_name)
-                if status = pod["status"]
-                  pod_ip = status["podIP"]
-                  if pod_ip && pod_ip.strip.length > 0
-                    service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
-                    vhosts << [pod, rule_host, service_name, service_port]
+            if endpoint = self.locate_endpoint(service_name)
+              upstreams = []
+
+              if subsets = endpoint["subsets"]
+                subsets.each do |subset|
+                  if addresses = subset["addresses"]
+                    if ports = subset["ports"]
+                      ports.each do |port_def|
+                        addresses.each do |address|
+                          if ip = address["ip"]
+                            if port = port_def["port"]
+                              upstreams << "%s:%s" % [ip, port]
+                            end
+                          end
+                        end
+                      end
+                    end
                   end
                 end
               end
+
+              vhosts << [rule_host, service_name, upstreams]
             end
+#            if service = self.locate_service(service_name)
+#              pod_name = service["spec"]["selector"]["name"]
+#              if pod = self.locate_pod(pod_name)
+#                if status = pod["status"]
+#                  pod_ip = status["podIP"]
+#                  if pod_ip && pod_ip.strip.length > 0
+#                    service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
+#                    vhosts << [pod, rule_host, service_name, service_port]
+#                  end
+#                end
+#              end
+#            end
           end
         end
       end
@@ -442,6 +481,9 @@ module Bespoked
           when "ingresses"
             path_prefix % ["apis/extensions/v1beta1", "ingresses"]
 
+          when "endpoints"
+            path_prefix % ["api/v1", "endpoints"]
+
         else
           raise "unknown api Kind to watch: #{kind}"
         end
@@ -457,7 +499,12 @@ module Bespoked
       if description
         kind = description["kind"]
         name = description["metadata"]["name"]
-        @run_loop.log :info, :event, [type, kind, name]
+
+        unless (kind == "Endpoints" && name == "kubernetes")
+          #NOTE: kubernetes api-server endpoints are not logged, dont name your branch kubernetes
+          @run_loop.log :info, :event, [type, kind, name]
+        end
+
         case kind
           when "IngressList", "PodList", "ServiceList"
 
@@ -467,12 +514,16 @@ module Bespoked
           when "Service"
             self.register_service(type, description)
 
+          when "Endpoints"
+            self.register_endpoint(type, description)
+
           when "Ingress"
             self.register_ingress(type, description)
 
         end
       end
 
+      @heartbeat.stop
       @heartbeat.start(100, 0)
     end
   end
