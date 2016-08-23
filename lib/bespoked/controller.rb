@@ -20,10 +20,13 @@ module Bespoked
                   :nginx_process_waiter,
                   :filesystem,
                   :version_dir,
-                  :version
+                  :version,
+                  :checksum
 
-    RECONNECT_WAIT = 5000
+    WATCH_TIMEOUT = 1000 * 60 * 5
+    RECONNECT_WAIT = 1000
     RECONNECT_TRIES = 60
+    RELOAD_TIMEOUT = 1
 
     def initialize(options = {})
       self.version = 0
@@ -36,12 +39,19 @@ module Bespoked
       self.pipes = []
     end
 
+    def recheck
+      old_checksum = @checksum
+      @checksum = Digest::MD5.hexdigest(Marshal.dump(@descriptions))
+      @run_loop.log :info, :checksum, [old_checksum, @checksum]
+      return @checksum != old_checksum
+    end
+
     def nginx_mkdir
       defer = @run_loop.defer
 
       @version += 1
 
-      self.version_dir = File.join(@run_dir, (@version).to_s) # old Dir.mktmpdir #NOTE: this is outside the runloop....!
+      self.version_dir = File.join(@run_dir, (@version).to_s)
       self.var_lib_k8s_host_to_app_dir = File.join(@version_dir, "host_to_app") 
       self.var_lib_k8s_app_to_alias_dir = File.join(@version_dir, "app_to_alias") 
       self.var_lib_k8s_sites_dir = File.join(@version_dir, "sites")
@@ -117,7 +127,7 @@ module Bespoked
           self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
 
           @nginx_stderr_pipe.progress do |data|
-            #@run_loop.log :info, :nginx_stderr, data
+            @run_loop.log :info, :nginx_stderr, data
           end
           @nginx_stderr_pipe.start_read
 
@@ -192,13 +202,12 @@ module Bespoked
       # HTTP headers available
       http_parser.on_headers_complete = proc do
         http_ok = http_parser.status_code.to_i == 200
-        #@run_loop.log(:warn, :got_watch_headers, [http_ok])
+        @run_loop.log(:warn, :got_watch_headers, [http_ok])
         defer.resolve(http_ok)
       end
 
       # One chunk of the body
       http_parser.on_body = proc do |chunk|
-        #@run_loop.log(:debug, :chunk, [chunk])
         begin
           json_parser << chunk
         rescue Yajl::ParseError => bad_json
@@ -208,7 +217,7 @@ module Bespoked
 
       # Headers and body is all parsed
       http_parser.on_message_complete = proc do |env|
-        #@run_loop.log(:info, :on_message_completed, [])
+        @run_loop.log(:info, :on_message_completed, [])
       end
 
       new_client.connect(service_host, service_port.to_i) do |client|
@@ -219,7 +228,7 @@ module Bespoked
         end
 
         client.on_handshake do
-          client.enable_keepalive(10) #NOTE: TCP keep-alive circuot
+          client.enable_keepalive(10) #NOTE: TCP keep-alive circuit
           client.write(get_watch)
         end
 
@@ -238,6 +247,12 @@ module Bespoked
       end
 
       new_client.start_read
+
+      watch_timeout = @run_loop.timer
+      watch_timeout.start(WATCH_TIMEOUT, 0)
+      watch_timeout.progress do
+        new_client.close
+      end
 
       return retry_defer.promise
     end
@@ -343,7 +358,7 @@ module Bespoked
       EOF_NGINX_SITE_TEMPLATE
 
       upstream_template = <<-EOF_NGINX_UPSTREAM_TEMPLATE
-          server %s fail_timeout=0;
+          server %s fail_timeout=1 max_fails=0;
       EOF_NGINX_UPSTREAM_TEMPLATE
 
       ingress_descriptions.values.each do |ingress_description|
@@ -355,7 +370,7 @@ module Bespoked
           upstream_lines = upstreams.collect { |upstream|
             upstream_template % [upstream]
           }
-          site_config = site_template % [service_name, upstream_lines.join("\n")]
+          site_config = site_template % [service_name, (upstream_lines * 4).join("\n")]
           map_name = service_name
 
           if Dir.exists?(@var_lib_k8s_host_to_app_dir) &&
@@ -448,18 +463,6 @@ module Bespoked
 
               vhosts << [rule_host, service_name, upstreams]
             end
-#            if service = self.locate_service(service_name)
-#              pod_name = service["spec"]["selector"]["name"]
-#              if pod = self.locate_pod(pod_name)
-#                if status = pod["status"]
-#                  pod_ip = status["podIP"]
-#                  if pod_ip && pod_ip.strip.length > 0
-#                    service_port = "#{pod_ip}:#{http_path["backend"]["servicePort"]}"
-#                    vhosts << [pod, rule_host, service_name, service_port]
-#                  end
-#                end
-#              end
-#            end
           end
         end
       end
@@ -515,7 +518,9 @@ module Bespoked
             self.register_service(type, description)
 
           when "Endpoints"
-            self.register_endpoint(type, description)
+            unless (kind == "Endpoints" && name == "kubernetes")
+              self.register_endpoint(type, description)
+            end
 
           when "Ingress"
             self.register_ingress(type, description)
@@ -523,8 +528,10 @@ module Bespoked
         end
       end
 
-      @heartbeat.stop
-      @heartbeat.start(100, 0)
+      if self.recheck
+        @heartbeat.stop
+        @heartbeat.start(RELOAD_TIMEOUT, 0)
+      end
     end
   end
 end

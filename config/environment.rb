@@ -5,6 +5,7 @@ $:.unshift File.join(File.dirname(__FILE__), "../lib")
 # stdlib
 require 'yaml'
 require 'open3'
+require 'digest/md5'
 
 #require 'tempfile'
 #require 'fileutils'
