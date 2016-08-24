@@ -26,7 +26,7 @@ module Bespoked
     WATCH_TIMEOUT = 1000 * 60 * 5
     RECONNECT_WAIT = 1000
     RECONNECT_TRIES = 60
-    RELOAD_TIMEOUT = 1
+    RELOAD_TIMEOUT = 500
 
     def initialize(options = {})
       self.version = 0
@@ -333,8 +333,8 @@ module Bespoked
       ing_ok = self.create_watch_pipe("ingresses")
       ser_ok = self.create_watch_pipe("services")
       pod_ok = self.create_watch_pipe("pods")
-      end_ok = self.create_watch_pipe("endpoints")
-      @run_loop.finally(ing_ok, ser_ok, pod_ok, end_ok).then do |deferred_auths|
+      #end_ok = self.create_watch_pipe("endpoints")
+      @run_loop.finally(ing_ok, ser_ok, pod_ok).then do |deferred_auths|
         auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
         #@run_loop.log :info, :got_auth, auth_ok
 
@@ -353,24 +353,26 @@ module Bespoked
 
       site_template = <<-EOF_NGINX_SITE_TEMPLATE
         upstream %s {
+          least_conn;
           %s
         }
       EOF_NGINX_SITE_TEMPLATE
 
-      upstream_template = <<-EOF_NGINX_UPSTREAM_TEMPLATE
-          server %s fail_timeout=1 max_fails=0;
-      EOF_NGINX_UPSTREAM_TEMPLATE
+      upstream_template = "server %s max_fails=0 fail_timeout=0"
 
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
         vhosts_for_ingress.each do |host, service_name, upstreams|
-          #pod_name = self.extract_name(pod)
           host_to_app_line = host_to_app_template % [host, service_name]
           app_to_alias_line = app_to_alias_template % [service_name, default_alias]
           upstream_lines = upstreams.collect { |upstream|
             upstream_template % [upstream]
           }
-          site_config = site_template % [service_name, (upstream_lines * 4).join("\n")]
+
+          site_upstreams = (upstream_lines * 8).map { |up| up + ";" }.join("\n")
+
+          site_config = site_template % [service_name, site_upstreams]
+
           map_name = service_name
 
           if Dir.exists?(@var_lib_k8s_host_to_app_dir) &&
@@ -390,9 +392,9 @@ module Bespoked
               f.write(site_config)
             end
 
-            @run_loop.log(:info, :installing_ingress, [host, service_name, upstreams])
+            @run_loop.log(:info, :installing_ingress, [host, service_name, site_upstreams])
           else
-            @run_loop.log(:info, :missing_map_dirs, [host, service_name, upstreams])
+            @run_loop.log(:info, :missing_map_dirs, [host, service_name, site_upstreams])
           end
         end
       end
@@ -440,6 +442,21 @@ module Bespoked
         if http = rule["http"]
           http["paths"].each do |http_path|
             service_name = http_path["backend"]["serviceName"]
+            if service = self.locate_service(service_name)
+              if spec = service["spec"]
+                upstreams = []
+                if ports = spec["ports"]
+                  ports.each do |port|
+                    upstreams << "%s:%s" % [service_name, port["port"]]
+                  end
+                end
+                if upstreams.length > 0
+                  vhosts << [rule_host, service_name, upstreams]
+                end
+              end
+            end
+
+=begin
             if endpoint = self.locate_endpoint(service_name)
               upstreams = []
 
@@ -463,6 +480,8 @@ module Bespoked
 
               vhosts << [rule_host, service_name, upstreams]
             end
+=end
+
           end
         end
       end
