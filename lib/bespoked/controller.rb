@@ -26,7 +26,7 @@ module Bespoked
     WATCH_TIMEOUT = 1000 * 60 * 5
     RECONNECT_WAIT = 1000
     RECONNECT_TRIES = 60
-    RELOAD_TIMEOUT = 500
+    RELOAD_TIMEOUT = 2000
 
     def initialize(options = {})
       self.version = 0
@@ -310,11 +310,16 @@ module Bespoked
           self.nginx_mkdir.then do
             self.install_vhosts(ingress_descriptions)
             self.nginx_install_version.then do
-        begin
-          Process.kill("HUP", @nginx_process_waiter.pid)
-        rescue Errno::ESRCH => no_child
-          @run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
-        end
+              begin
+                Process.kill("HUP", @nginx_process_waiter.pid)
+              rescue Errno::ESRCH => no_child
+                @run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
+              end
+
+              if @version > 2
+                third_oldest_version = File.join(@run_dir, "last-version-before-" + (@version - 2).to_s)
+                system("rm", "-Rf", third_oldest_version)
+              end
             end
           end
         end
@@ -358,7 +363,7 @@ module Bespoked
         }
       EOF_NGINX_SITE_TEMPLATE
 
-      upstream_template = "server %s max_fails=0 fail_timeout=0"
+      upstream_template = "server %s max_fails=0 fail_timeout=0 resolve"
 
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
