@@ -363,7 +363,11 @@ module Bespoked
         }
       EOF_NGINX_SITE_TEMPLATE
 
-      upstream_template = "server %s max_fails=0 fail_timeout=0 resolve"
+      ## NOTE: commercial nginx should activate DNS upstream resolution
+      ## zone upstreams 32m;
+      ## server %s max_fails=0 fail_timeout=0 resolve
+
+      upstream_template = "server %s max_fails=0 fail_timeout=0"
 
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
