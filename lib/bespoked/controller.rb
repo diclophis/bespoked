@@ -366,6 +366,7 @@ module Bespoked
       ## NOTE: commercial nginx should activate DNS upstream resolution
       ## zone upstreams 32m;
       ## server %s max_fails=0 fail_timeout=0 resolve
+      ## ... ugh
 
       upstream_template = "server %s max_fails=0 fail_timeout=0"
 
