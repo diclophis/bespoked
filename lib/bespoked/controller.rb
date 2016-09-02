@@ -132,7 +132,7 @@ module Bespoked
           @nginx_stderr_pipe.start_read
 
           @nginx_stdout_pipe.progress do |data|
-            #@run_loop.log :info, :nginx_stdout, data
+            @run_loop.log :info, :nginx_stdout, data
           end
           @nginx_stdout_pipe.start_read
         end
