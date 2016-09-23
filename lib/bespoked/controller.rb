@@ -240,7 +240,7 @@ module Bespoked
 
       new_client.catch do |err|
         #NOTE: if the connection refuses, retry the connection
-        @run_loop.log(:warn, :watch_client_error, err)
+        @run_loop.log(:warn, :watch_client_error, [err, err.class])
         if err.is_a?(Libuv::Error::ECONNREFUSED)
           retry_defer.resolve(true)
         end
