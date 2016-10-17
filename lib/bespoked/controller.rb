@@ -5,10 +5,11 @@ module Bespoked
     attr_accessor :proxy,
                   :descriptions,
                   :run_loop,
-                  :checksum
+                  :checksum,
+                  :watch
 
     WATCH_TIMEOUT = 1000 * 60 * 5
-    RECONNECT_WAIT = 1000
+    RECONNECT_WAIT = 2000
     RECONNECT_TRIES = 60
     RELOAD_TIMEOUT = 2000
 
@@ -40,7 +41,8 @@ module Bespoked
     def initialize(options = {})
       self.descriptions = {}
       self.run_loop = Libuv::Loop.default
-      self.proxy = IngressProxy.new(@run_loop)
+      self.proxy = Proxy.new(@run_loop)
+      self.watch = Watch.new(@run_loop)
     end
 
     def start_proxy
@@ -68,7 +70,7 @@ module Bespoked
       @run_loop.stop
     end
 
-    def create_watch_pipe(resource_kind)
+    def pipe(resource_kind)
       defer = @run_loop.defer
 
       reconnect_timer = @run_loop.timer
@@ -79,7 +81,12 @@ module Bespoked
       }
 
       reconnect_timer.progress do
-        reconnect_loop = self.create_retry_watch(resource_kind, defer)
+        json_parser = Yajl::Parser.new
+        json_parser.on_parse_complete = proc do |event|
+          self.handle_event(event)
+        end
+
+        reconnect_loop = @watch.create(resource_kind, defer, json_parser)
         reconnect_loop.then do
           proceed_with_reconnect.call
         end
@@ -90,89 +97,6 @@ module Bespoked
       return defer.promise
     end
 
-    def create_retry_watch(resource_kind, defer)
-      var_run_secrets_k8s_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
-      var_run_secrets_k8s_crt_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
-
-      service_host = ENV["KUBERNETES_SERVICE_HOST"] || "127.0.0.1"
-      service_port = ENV["KUBERNETES_SERVICE_PORT"] || "8443"
-      bearer_token = ENV["KUBERNETES_DEV_BEARER_TOKEN"] || begin
-         unless File.exist?(var_run_secrets_k8s_token_path) && (File.size(var_run_secrets_k8s_token_path) > 0)
-           self.halt :k8s_token_not_ready
-         end
-
-         File.read(var_run_secrets_k8s_token_path).strip
-      end
-
-      get_watch = "GET #{self.path_for_watch(resource_kind)} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: */*\r\nUser-Agent: bespoked\r\n\r\n"
-
-      new_client = @run_loop.tcp
-      retry_defer = @run_loop.defer
-
-      http_parser = Http::Parser.new
-
-      json_parser = Yajl::Parser.new
-      json_parser.on_parse_complete = proc do |event|
-        self.handle_event(event)
-      end
-
-      # HTTP headers available
-      http_parser.on_headers_complete = proc do
-        http_ok = http_parser.status_code.to_i == 200
-        @run_loop.log(:warn, :got_watch_headers, [http_ok])
-        defer.resolve(http_ok)
-      end
-
-      # One chunk of the body
-      http_parser.on_body = proc do |chunk|
-        begin
-          json_parser << chunk
-        rescue Yajl::ParseError => bad_json
-          @run_loop.log(:error, :bad_json, [bad_json, chunk])
-        end
-      end
-
-      # Headers and body is all parsed
-      http_parser.on_message_complete = proc do |env|
-        @run_loop.log(:info, :on_message_completed, [])
-      end
-
-      new_client.connect(service_host, service_port.to_i) do |client|
-        client.start_tls({:server => false, :cert_chain => var_run_secrets_k8s_crt_path})
-
-        client.progress do |data|
-          http_parser << data
-        end
-
-        client.on_handshake do
-          client.enable_keepalive(10) #NOTE: TCP keep-alive circuit
-          client.write(get_watch)
-        end
-
-        client.finally do |finish|
-          @run_loop.log(:warn, :watch_disconnected, finish)
-          retry_defer.resolve(true)
-        end
-      end
-
-      new_client.catch do |err|
-        #NOTE: if the connection refuses, retry the connection
-        @run_loop.log(:warn, :watch_client_error, [err, err.class])
-        if err.is_a?(Libuv::Error::ECONNREFUSED)
-          retry_defer.resolve(true)
-        end
-      end
-
-      new_client.start_read
-
-      watch_timeout = @run_loop.timer
-      watch_timeout.start(WATCH_TIMEOUT, 0)
-      watch_timeout.progress do
-        new_client.close
-      end
-
-      return retry_defer.promise
-    end
 
     def ingress
       @run_loop.signal(:INT) do |_sigint|
@@ -240,14 +164,12 @@ module Bespoked
     end
 
     def connect(proceed)
-      ing_ok = self.create_watch_pipe("ingresses")
-      ser_ok = self.create_watch_pipe("services")
-      pod_ok = self.create_watch_pipe("pods")
-      #end_ok = self.create_watch_pipe("endpoints")
+      ing_ok = self.pipe("ingresses")
+      ser_ok = self.pipe("services")
+      pod_ok = self.pipe("pods")
 
       @run_loop.finally(ing_ok, ser_ok, pod_ok).then do |deferred_auths|
         auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
-        #@run_loop.log :info, :got_auth, auth_ok
 
         if auth_ok
           @retry_timer.stop

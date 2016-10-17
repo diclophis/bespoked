@@ -1,5 +1,5 @@
 
-class IngressProxy
+class Proxy
   attr_accessor :run_loop
 
   def initialize(run_loop_in)
