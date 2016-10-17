@@ -7,7 +7,8 @@ module Bespoked
                   :run_loop,
                   :checksum,
                   :watch,
-                  :dashboard
+                  :dashboard,
+                  :health
 
     WATCH_TIMEOUT = 1000 * 60 * 5
     RECONNECT_WAIT = 2000
@@ -125,9 +126,11 @@ module Bespoked
         @stdout_pipe = @run_loop.pipe
         @stdout_pipe.open($stdout.fileno)
 
-        self.proxy = Proxy.new(@run_loop)
-        self.watch = Watch.new(@run_loop)
         self.dashboard = Dashboard.new(@run_loop)
+        self.health = HealthService.new(@run_loop)
+
+        self.proxy = RackProxy.new(@run_loop)
+        self.watch = CommandWatch.new(@run_loop)
 
         @run_loop.log(:info, :run_dir, @run_dir)
 
