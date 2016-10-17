@@ -83,6 +83,7 @@ module Bespoked
       reconnect_timer.progress do
         json_parser = Yajl::Parser.new
         json_parser.on_parse_complete = proc do |event|
+          @run_loop.log(:info, :on_parse_complete, event)
           self.handle_event(event)
         end
 
@@ -147,6 +148,8 @@ module Bespoked
       @heartbeat = @run_loop.timer
 
       @heartbeat.progress do
+        @run_loop.log(:info, :heartbeat_progress)
+
         if ingress_descriptions = @descriptions["ingress"]
           self.install_proxy(ingress_descriptions)
         end
@@ -181,8 +184,15 @@ module Bespoked
 
 
     def handle_event(event)
-      type = event["type"]
-      description = event["object"]
+      type = nil
+      description = nil
+
+      if type = event["type"]
+        description = event["object"]
+      else
+        type = "ADDED"
+        description = event
+      end
 
       if description
         kind = description["kind"]
@@ -194,7 +204,14 @@ module Bespoked
         end
 
         case kind
-          when "IngressList", "PodList", "ServiceList"
+          when "PodList", "ServiceList"
+            @run_loop.log(:info, :unsupported_resource_list_type, kind)
+
+          when "IngressList"
+            puts event.keys
+            event["items"].each do |ingress|
+              self.register_ingress(type, ingress)
+            end
 
           when "Pod"
             self.register_pod(type, description)
@@ -223,62 +240,6 @@ module Bespoked
       if metadata = description["metadata"]
         metadata["name"]
       end
-    end
-
-    def extract_vhosts(description)
-      ingress_name = self.extract_name(description)
-      spec_rules = description["spec"]["rules"]
-
-      vhosts = []
-
-      spec_rules.each do |rule|
-        rule_host = rule["host"]
-        if http = rule["http"]
-          http["paths"].each do |http_path|
-            service_name = http_path["backend"]["serviceName"]
-            if service = self.locate_service(service_name)
-              if spec = service["spec"]
-                upstreams = []
-                if ports = spec["ports"]
-                  ports.each do |port|
-                    upstreams << "%s:%s" % [service_name, port["port"]]
-                  end
-                end
-                if upstreams.length > 0
-                  vhosts << [rule_host, service_name, upstreams]
-                end
-              end
-            end
-          end
-        end
-      end
-
-      vhosts
-    end
-
-    def path_for_watch(kind)
-      #TODO: add resource very query support e.g. ?resourceVersion=0
-      path_prefix = "/%s/watch/namespaces/default/%s"
-      path_for_watch = begin
-        case kind
-          when "pods"
-            path_prefix % ["api/v1", "pods"]
-
-          when "services"
-            path_prefix % ["api/v1", "services"]
-
-          when "ingresses"
-            path_prefix % ["apis/extensions/v1beta1", "ingresses"]
-
-          when "endpoints"
-            path_prefix % ["api/v1", "endpoints"]
-
-        else
-          raise "unknown api Kind to watch: #{kind}"
-        end
-      end
-
-      path_for_watch
     end
   end
 end

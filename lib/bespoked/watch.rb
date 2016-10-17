@@ -16,8 +16,14 @@ class Watch
     @stdin_pipe.open($stdin.fileno)
     @run_loop.log(:info, :fake_watch, @stdin_pipe)
     @stdin_pipe.progress do |chunk|
-      json_parser << chunk
+      begin
+        json_parser << chunk
+      rescue Yajl::ParseError => bad_json
+        @run_loop.log(:error, :bad_json, [bad_json, chunk])
+      end
     end
+
+    @stdin_pipe.start_read
 
     retry_defer = @run_loop.defer
     watch_timeout = @run_loop.timer

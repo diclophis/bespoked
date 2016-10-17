@@ -79,4 +79,29 @@ class RemoteWatch < Watch
 
     return retry_defer.promise
   end
+
+  def path_for_watch(kind)
+    #TODO: add resource very query support e.g. ?resourceVersion=0
+    path_prefix = "/%s/watch/namespaces/default/%s"
+    path_for_watch = begin
+      case kind
+        when "pods"
+          path_prefix % ["api/v1", "pods"]
+
+        when "services"
+          path_prefix % ["api/v1", "services"]
+
+        when "ingresses"
+          path_prefix % ["apis/extensions/v1beta1", "ingresses"]
+
+        when "endpoints"
+          path_prefix % ["api/v1", "endpoints"]
+
+      else
+        raise "unknown api Kind to watch: #{kind}"
+      end
+    end
+
+    path_for_watch
+  end
 end

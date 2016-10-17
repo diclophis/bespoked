@@ -208,4 +208,35 @@ class NginxProxy < IngressProxy
 
     return defer.promise
   end
+
+  def extract_vhosts(description)
+    ingress_name = self.extract_name(description)
+    spec_rules = description["spec"]["rules"]
+
+    vhosts = []
+
+    spec_rules.each do |rule|
+      rule_host = rule["host"]
+      if http = rule["http"]
+        http["paths"].each do |http_path|
+          service_name = http_path["backend"]["serviceName"]
+          if service = self.locate_service(service_name)
+            if spec = service["spec"]
+              upstreams = []
+              if ports = spec["ports"]
+                ports.each do |port|
+                  upstreams << "%s:%s" % [service_name, port["port"]]
+                end
+              end
+              if upstreams.length > 0
+                vhosts << [rule_host, service_name, upstreams]
+              end
+            end
+          end
+        end
+      end
+    end
+
+    vhosts
+  end
 end

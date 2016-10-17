@@ -7,7 +7,7 @@ class Proxy
   end
 
   def install(ingress_descriptions)
-    puts :install
+    @run_loop.log(:info, :fake_install, ingress_descriptions)
   end
 
   def start
