@@ -1,15 +1,15 @@
 #
 
 class Watch
+  DEBUG_WATCH_TIMEOUT = 30000
+
   attr_accessor :run_loop
 
   def initialize(run_loop_in)
-    puts :init_watch
     self.run_loop = run_loop_in
   end
 
   def create(resource_kind, defer, json_parser)
-    puts :create, resource_kind, defer
     defer.resolve(true)
 
     combined = ["ssh", "provision@jenkins-master01.staging.mavenlink.net", "kubectl", "get", "-o=json", "-w", resource_kind]
@@ -47,13 +47,15 @@ class Watch
 
     retry_defer = @run_loop.defer
     watch_timeout = @run_loop.timer
-    watch_timeout.start(10000, 0)
+    watch_timeout.start(DEBUG_WATCH_TIMEOUT, 0)
     watch_timeout.progress do
-      process_waiter.kill
       Process.kill("INT", process_waiter.pid)
-      puts [:faking_disconnect, process_waiter.join].inspect
+      process_waiter.kill
+      process_waiter.join
+
       retry_defer.resolve(true)
     end
+
     return retry_defer.promise
   end
 end

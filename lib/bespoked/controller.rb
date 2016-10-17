@@ -41,8 +41,6 @@ module Bespoked
     def initialize(options = {})
       self.descriptions = {}
       self.run_loop = Libuv::Loop.default
-      self.proxy = Proxy.new(@run_loop)
-      self.watch = Watch.new(@run_loop)
     end
 
     def start_proxy
@@ -83,7 +81,6 @@ module Bespoked
       reconnect_timer.progress do
         json_parser = Yajl::Parser.new
         json_parser.on_parse_complete = proc do |event|
-          @run_loop.log(:info, :on_parse_complete, event)
           self.handle_event(event)
         end
 
@@ -127,6 +124,9 @@ module Bespoked
         @stdout_pipe = @run_loop.pipe
         @stdout_pipe.open($stdout.fileno)
 
+        self.proxy = Proxy.new(@run_loop)
+        self.watch = Watch.new(@run_loop)
+
         @run_loop.log(:info, :run_dir, @run_dir)
 
         logger.progress do |level, type, message, _not_used|
@@ -157,11 +157,9 @@ module Bespoked
       defer = @run_loop.defer
 
       #TODO: what is this defer for???
-      #defer.promise.then do
-      #
-      #end
-
-      self.start_proxy
+      defer.promise.then do
+        self.start_proxy
+      end
 
       return defer
     end

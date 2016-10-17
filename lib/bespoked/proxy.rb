@@ -1,3 +1,4 @@
+#
 
 class Proxy
   attr_accessor :run_loop
@@ -7,14 +8,15 @@ class Proxy
   end
 
   def install(ingress_descriptions)
-    @run_loop.log(:info, :fake_install, ingress_descriptions)
+    @run_loop.log(:info, :debug_proxy_install, ingress_descriptions.keys)
   end
 
   def start
-    puts :start
+    puts @run_loop.inspect
+    @run_loop.log(:info, :debug_proxy_start, nil)
   end
 
   def stop
-    puts :stop
+    @run_loop.log(:info, :debug_proxy_stop, nil)
   end
 end
