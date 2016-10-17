@@ -9,6 +9,9 @@ gem 'libuv', :git => "https://github.com/mavenlink/libuv.git", :branch => "fix-e
 # simple callback-based HTTP request/response parser
 gem 'http_parser.rb'
 
+# a modular Ruby webserver interface http://rack.github.io/
+gem 'rack'
+
 group :test do
   # for testing
   gem 'minitest', '5.7.0'

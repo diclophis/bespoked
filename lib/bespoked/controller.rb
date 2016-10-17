@@ -6,7 +6,8 @@ module Bespoked
                   :descriptions,
                   :run_loop,
                   :checksum,
-                  :watch
+                  :watch,
+                  :dashboard
 
     WATCH_TIMEOUT = 1000 * 60 * 5
     RECONNECT_WAIT = 2000
@@ -126,6 +127,7 @@ module Bespoked
 
         self.proxy = Proxy.new(@run_loop)
         self.watch = Watch.new(@run_loop)
+        self.dashboard = Dashboard.new(@run_loop)
 
         @run_loop.log(:info, :run_dir, @run_dir)
 

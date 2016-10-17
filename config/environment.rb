@@ -17,5 +17,7 @@ require 'libuv'
 require 'libuv/coroutines'
 require 'http/parser'
 require 'yajl'
+require 'rack'
+require 'webrick'
 
 require 'bespoked'

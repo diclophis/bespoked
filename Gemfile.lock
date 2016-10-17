@@ -17,6 +17,7 @@ GEM
       rake
     http_parser.rb (0.6.0)
     minitest (5.7.0)
+    rack (1.6.4)
     rake (11.2.2)
     ruby-tls (2.1.2)
       ffi-compiler (>= 0.0.2)
@@ -31,4 +32,5 @@ DEPENDENCIES
   http_parser.rb
   libuv!
   minitest (= 5.7.0)
+  rack
   yajl-ruby
