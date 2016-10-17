@@ -2,25 +2,9 @@
 
 module Bespoked
   class Controller
-    attr_accessor :run_dir,
-                  :var_lib_k8s,
-                  :var_lib_k8s_host_to_app_dir,
-                  :var_lib_k8s_app_to_alias_dir,
-                  :var_lib_k8s_sites_dir,
-                  :var_lib_k8s_logs_dir,
+    attr_accessor :proxy,
                   :descriptions,
                   :run_loop,
-                  :pipes,
-                  :nginx_conf_path,
-                  :nginx_stdout_pipe,
-                  :nginx_stderr_pipe,
-                  :nginx_stdin,
-                  :nginx_stdout,
-                  :nginx_stderr,
-                  :nginx_process_waiter,
-                  :filesystem,
-                  :version_dir,
-                  :version,
                   :checksum
 
     WATCH_TIMEOUT = 1000 * 60 * 5
@@ -28,15 +12,47 @@ module Bespoked
     RECONNECT_TRIES = 60
     RELOAD_TIMEOUT = 2000
 
-    def initialize(options = {})
-      self.version = 0
-      self.run_dir = options["var-lib-k8s"] || Dir.mktmpdir
-      self.var_lib_k8s = File.join(@run_dir, "current")
-      self.descriptions = {}
+    KINDS = ["pod", "service", "ingress", "endpoint"]
+    KINDS.each do |kind|
+      register_method = "register_#{kind}"
+      locate_method = "locate_#{kind}"
 
+      define_method register_method do |event, description|
+        self.descriptions[kind] ||= {}
+
+        name = self.extract_name(description)
+
+        case event
+          when "ADDED", "MODIFIED"
+            self.descriptions[kind][name] = description
+          when "DELETED"
+            self.descriptions[kind].delete(name)
+
+        end
+      end
+
+      define_method locate_method do |name|
+        self.descriptions[kind] ||= {}
+        self.descriptions[kind][name]
+      end
+    end
+
+    def initialize(options = {})
+      self.descriptions = {}
       self.run_loop = Libuv::Loop.default
-      self.filesystem = @run_loop.filesystem
-      self.pipes = []
+      self.proxy = IngressProxy.new(@run_loop)
+    end
+
+    def start_proxy
+      @proxy.start
+    end
+
+    def stop_proxy
+      @proxy.stop
+    end
+
+    def install_proxy(ingress_descriptions)
+      @proxy.install(ingress_descriptions)
     end
 
     def recheck
@@ -46,107 +62,8 @@ module Bespoked
       return @checksum != old_checksum
     end
 
-    def nginx_mkdir
-      defer = @run_loop.defer
-
-      @version += 1
-
-      self.version_dir = File.join(@run_dir, (@version).to_s)
-      self.var_lib_k8s_host_to_app_dir = File.join(@version_dir, "host_to_app") 
-      self.var_lib_k8s_app_to_alias_dir = File.join(@version_dir, "app_to_alias") 
-      self.var_lib_k8s_sites_dir = File.join(@version_dir, "sites")
-      self.var_lib_k8s_logs_dir = File.join(@version_dir, "logs")
-
-      @run_loop.finally(@filesystem.mkdir(@version_dir)).then do
-        @filesystem.mkdir(@var_lib_k8s_host_to_app_dir).then do
-          @filesystem.mkdir(@var_lib_k8s_app_to_alias_dir).then do
-            @filesystem.mkdir(@var_lib_k8s_logs_dir).then do
-              @filesystem.mkdir(@var_lib_k8s_sites_dir).then do
-                defer.resolve(@version_dir)
-              end
-            end
-          end
-        end
-      end
-
-      return defer.promise
-    end
-
-    def nginx_install_version
-      defer = @run_loop.defer
-
-      @last_lstat = @filesystem.lstat(@var_lib_k8s)
-
-      proceed = proc {
-        @filesystem.rename(@version_dir, @var_lib_k8s).then do
-          defer.resolve(true)
-        end
-      }
-
-      lstat_failed = proc { |reason|
-        @run_loop.log :info, :ignore_current_lstat_failed, reason
-        proceed.call
-      }
-
-      proceed_with_current_to_last_rename = proc {
-        rename_current_failed = proc { |reason|
-          @run_loop.log :error, :rename_current_to_last_failed, reason
-        }
-
-        @filesystem.rename(@var_lib_k8s, File.join(@run_dir, "last-version-before-" + @version.to_s)).then(nil, rename_current_failed) do
-          proceed.call
-        end
-      }
-
-      @last_lstat.then(nil, lstat_failed) do
-        proceed_with_current_to_last_rename.call
-      end
-
-      return defer.promise
-    end
-
-    # prepares nginx run loop
-    def install_nginx_pipes
-      self.nginx_conf_path = File.join(@run_dir, "nginx.conf")
-      local_nginx_conf = File.realpath(File.join(File.dirname(__FILE__), "../..", "nginx/empty.nginx.conf"))
-
-      File.link(local_nginx_conf, @nginx_conf_path)
-
-      self.nginx_mkdir.then do |new_version|
-        self.nginx_install_version.then do
-          combined = ["nginx", "-p", @run_dir, "-c", "nginx.conf", "-g", "pid #{@run_dir}/nginx.pid;"]
-          self.nginx_stdin, self.nginx_stdout, self.nginx_stderr, self.nginx_process_waiter = Open3.popen3(*combined)
-
-          self.nginx_stdout_pipe = @run_loop.pipe
-          self.nginx_stderr_pipe = @run_loop.pipe
-
-          @pipes << self.nginx_stdout_pipe
-          @pipes << self.nginx_stderr_pipe
-
-          self.nginx_stdout_pipe.open(@nginx_stdout.fileno)
-          self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
-
-          @nginx_stderr_pipe.progress do |data|
-            @run_loop.log :info, :nginx_stderr, data
-          end
-          @nginx_stderr_pipe.start_read
-
-          @nginx_stdout_pipe.progress do |data|
-            @run_loop.log :info, :nginx_stdout, data
-          end
-          @nginx_stdout_pipe.start_read
-        end
-      end
-    end
-
     def halt(message)
-      if @nginx_process_waiter
-        begin
-          Process.kill("INT", @nginx_process_waiter.pid)
-        rescue Errno::ESRCH
-        end
-        @nginx_process_waiter.join
-      end
+      self.stop_proxy
       @run_loop.log(:info, :halt, message)
       @run_loop.stop
     end
@@ -307,29 +224,17 @@ module Bespoked
 
       @heartbeat.progress do
         if ingress_descriptions = @descriptions["ingress"]
-          self.nginx_mkdir.then do
-            self.install_vhosts(ingress_descriptions)
-            self.nginx_install_version.then do
-              begin
-                Process.kill("HUP", @nginx_process_waiter.pid)
-              rescue Errno::ESRCH => no_child
-                @run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
-              end
-
-              if @version > 2
-                third_oldest_version = File.join(@run_dir, "last-version-before-" + (@version - 2).to_s)
-                system("rm", "-Rf", third_oldest_version)
-              end
-            end
-          end
+          self.install_proxy(ingress_descriptions)
         end
       end
 
       defer = @run_loop.defer
-      defer.promise.then do
-      end
+      
+      #defer.promise.then do
+      #
+      #end
 
-      self.install_nginx_pipes
+      self.start_proxy
 
       return defer
     end
@@ -339,6 +244,7 @@ module Bespoked
       ser_ok = self.create_watch_pipe("services")
       pod_ok = self.create_watch_pipe("pods")
       #end_ok = self.create_watch_pipe("endpoints")
+
       @run_loop.finally(ing_ok, ser_ok, pod_ok).then do |deferred_auths|
         auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
         #@run_loop.log :info, :got_auth, auth_ok
@@ -351,178 +257,6 @@ module Bespoked
       end
     end
 
-    def install_vhosts(ingress_descriptions)
-      host_to_app_template = "%s %s;\n"
-      app_to_alias_template = "%s %s;\n"
-      default_alias = "/dev/null/"
-
-      site_template = <<-EOF_NGINX_SITE_TEMPLATE
-        upstream %s {
-          least_conn;
-          %s
-        }
-      EOF_NGINX_SITE_TEMPLATE
-
-      ## NOTE: commercial nginx should activate DNS upstream resolution
-      ## zone upstreams 32m;
-      ## server %s max_fails=0 fail_timeout=0 resolve
-      ## ... ugh
-
-      upstream_template = "server %s max_fails=0 fail_timeout=0"
-
-      ingress_descriptions.values.each do |ingress_description|
-        vhosts_for_ingress = self.extract_vhosts(ingress_description)
-        vhosts_for_ingress.each do |host, service_name, upstreams|
-          host_to_app_line = host_to_app_template % [host, service_name]
-          app_to_alias_line = app_to_alias_template % [service_name, default_alias]
-          upstream_lines = upstreams.collect { |upstream|
-            upstream_template % [upstream]
-          }
-
-          site_upstreams = (upstream_lines * 8).map { |up| up + ";" }.join("\n")
-
-          site_config = site_template % [service_name, site_upstreams]
-
-          map_name = service_name
-
-          if Dir.exists?(@var_lib_k8s_host_to_app_dir) &&
-             Dir.exists?(@var_lib_k8s_app_to_alias_dir) &&
-             Dir.exists?(@var_lib_k8s_sites_dir) then
-
-            #TODO: make this use async io
-            File.open(File.join(@var_lib_k8s_host_to_app_dir, map_name), "w+") do |f|
-              f.write(host_to_app_line)
-            end
-
-            File.open(File.join(@var_lib_k8s_app_to_alias_dir, map_name), "w+") do |f|
-              f.write(app_to_alias_line)
-            end
-
-            File.open(File.join(@var_lib_k8s_sites_dir, map_name), "w+") do |f|
-              f.write(site_config)
-            end
-
-            @run_loop.log(:info, :installing_ingress, [host, service_name, site_upstreams])
-          else
-            @run_loop.log(:info, :missing_map_dirs, [host, service_name, site_upstreams])
-          end
-        end
-      end
-    end
-
-    KINDS = ["pod", "service", "ingress", "endpoint"]
-    KINDS.each do |kind|
-      register_method = "register_#{kind}"
-      locate_method = "locate_#{kind}"
-
-      define_method register_method do |event, description|
-        self.descriptions[kind] ||= {}
-
-        name = self.extract_name(description)
-
-        case event
-          when "ADDED", "MODIFIED"
-            self.descriptions[kind][name] = description
-          when "DELETED"
-            self.descriptions[kind].delete(name)
-
-        end
-      end
-
-      define_method locate_method do |name|
-        self.descriptions[kind] ||= {}
-        self.descriptions[kind][name]
-      end
-    end
-
-    def extract_name(description)
-      if metadata = description["metadata"]
-        metadata["name"]
-      end
-    end
-
-    def extract_vhosts(description)
-      ingress_name = self.extract_name(description)
-      spec_rules = description["spec"]["rules"]
-
-      vhosts = []
-
-      spec_rules.each do |rule|
-        rule_host = rule["host"]
-        if http = rule["http"]
-          http["paths"].each do |http_path|
-            service_name = http_path["backend"]["serviceName"]
-            if service = self.locate_service(service_name)
-              if spec = service["spec"]
-                upstreams = []
-                if ports = spec["ports"]
-                  ports.each do |port|
-                    upstreams << "%s:%s" % [service_name, port["port"]]
-                  end
-                end
-                if upstreams.length > 0
-                  vhosts << [rule_host, service_name, upstreams]
-                end
-              end
-            end
-
-=begin
-            if endpoint = self.locate_endpoint(service_name)
-              upstreams = []
-
-              if subsets = endpoint["subsets"]
-                subsets.each do |subset|
-                  if addresses = subset["addresses"]
-                    if ports = subset["ports"]
-                      ports.each do |port_def|
-                        addresses.each do |address|
-                          if ip = address["ip"]
-                            if port = port_def["port"]
-                              upstreams << "%s:%s" % [ip, port]
-                            end
-                          end
-                        end
-                      end
-                    end
-                  end
-                end
-              end
-
-              vhosts << [rule_host, service_name, upstreams]
-            end
-=end
-
-          end
-        end
-      end
-
-      vhosts
-    end
-
-    def path_for_watch(kind)
-      #TODO: add resource very query support e.g. ?resourceVersion=0
-      path_prefix = "/%s/watch/namespaces/default/%s"
-      path_for_watch = begin
-        case kind
-          when "pods"
-            path_prefix % ["api/v1", "pods"]
-
-          when "services"
-            path_prefix % ["api/v1", "services"]
-
-          when "ingresses"
-            path_prefix % ["apis/extensions/v1beta1", "ingresses"]
-
-          when "endpoints"
-            path_prefix % ["api/v1", "endpoints"]
-
-        else
-          raise "unknown api Kind to watch: #{kind}"
-        end
-      end
-
-      path_for_watch
-    end
 
     def handle_event(event)
       type = event["type"]
@@ -561,6 +295,68 @@ module Bespoked
         @heartbeat.stop
         @heartbeat.start(RELOAD_TIMEOUT, 0)
       end
+    end
+
+    def extract_name(description)
+      if metadata = description["metadata"]
+        metadata["name"]
+      end
+    end
+
+    def extract_vhosts(description)
+      ingress_name = self.extract_name(description)
+      spec_rules = description["spec"]["rules"]
+
+      vhosts = []
+
+      spec_rules.each do |rule|
+        rule_host = rule["host"]
+        if http = rule["http"]
+          http["paths"].each do |http_path|
+            service_name = http_path["backend"]["serviceName"]
+            if service = self.locate_service(service_name)
+              if spec = service["spec"]
+                upstreams = []
+                if ports = spec["ports"]
+                  ports.each do |port|
+                    upstreams << "%s:%s" % [service_name, port["port"]]
+                  end
+                end
+                if upstreams.length > 0
+                  vhosts << [rule_host, service_name, upstreams]
+                end
+              end
+            end
+          end
+        end
+      end
+
+      vhosts
+    end
+
+    def path_for_watch(kind)
+      #TODO: add resource very query support e.g. ?resourceVersion=0
+      path_prefix = "/%s/watch/namespaces/default/%s"
+      path_for_watch = begin
+        case kind
+          when "pods"
+            path_prefix % ["api/v1", "pods"]
+
+          when "services"
+            path_prefix % ["api/v1", "services"]
+
+          when "ingresses"
+            path_prefix % ["apis/extensions/v1beta1", "ingresses"]
+
+          when "endpoints"
+            path_prefix % ["api/v1", "endpoints"]
+
+        else
+          raise "unknown api Kind to watch: #{kind}"
+        end
+      end
+
+      path_for_watch
     end
   end
 end
