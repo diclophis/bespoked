@@ -24,11 +24,11 @@ module Bespoked
         name = self.extract_name(description)
 
         case event
-          when "ADDED", "MODIFIED"
-            self.descriptions[kind][name] = description
           when "DELETED"
             self.descriptions[kind].delete(name)
 
+        else
+          self.descriptions[kind][name] = description
         end
       end
 
@@ -98,7 +98,6 @@ module Bespoked
       return defer.promise
     end
 
-
     def ingress
       @run_loop.signal(:INT) do |_sigint|
         self.halt :run_loop_interupted
@@ -156,7 +155,8 @@ module Bespoked
       end
 
       defer = @run_loop.defer
-      
+
+      #TODO: what is this defer for???
       #defer.promise.then do
       #
       #end
@@ -182,7 +182,6 @@ module Bespoked
       end
     end
 
-
     def handle_event(event)
       type = nil
       description = nil
@@ -204,11 +203,17 @@ module Bespoked
         end
 
         case kind
-          when "PodList", "ServiceList"
-            @run_loop.log(:info, :unsupported_resource_list_type, kind)
+          when "PodList"
+            event["items"].each do |pod|
+              self.register_pod(type, pod)
+            end
+
+          when "ServiceList"
+            event["items"].each do |service|
+              self.register_service(type, service)
+            end
 
           when "IngressList"
-            puts event.keys
             event["items"].each do |ingress|
               self.register_ingress(type, ingress)
             end
@@ -227,6 +232,8 @@ module Bespoked
           when "Ingress"
             self.register_ingress(type, description)
 
+        else
+          @run_loop.log(:info, :unsupported_resource_list_type, kind)
         end
       end
 
