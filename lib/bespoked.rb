@@ -2,6 +2,7 @@
 
 module Bespoked
   autoload :LibUVRackHandler, 'bespoked/libuv_rack_handler'
+  autoload :LibUVHttpProxyHandler, 'bespoked/libuv_http_proxy_handler'
 
   autoload :Controller, 'bespoked/controller'
   autoload :Dashboard, 'bespoked/dashboard'
@@ -9,6 +10,9 @@ module Bespoked
 
   autoload :Proxy, 'bespoked/proxy'
   autoload :Watch, 'bespoked/watch'
+
+  #autoload :Proxy, 'bespoked/proxy'
+  autoload :DebugWatch, 'bespoked/debug_watch'
 
   autoload :NginxProxy, 'bespoked/nginx_proxy'
   autoload :KubernetesWatch, 'bespoked/kubernetes_watch'

@@ -12,22 +12,28 @@ module Bespoked
 
       server = run_loop.tcp
 
+      uri = URI::Parser.new
+
       server.bind(options[:BindAddress], options[:Port]) do |client|
         http_parser = Http::Parser.new
 
         # HTTP headers available
         http_parser.on_headers_complete = proc do
-          run_loop.log(:warn, :got_dashboard_headers, [http_parser.http_method, http_parser.request_url])
+          url = uri.parse("http://" + http_parser.headers["Host"])
+          host = url.host
+          port = url.port
+
+          run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
         end
 
         # One chunk of the body
         http_parser.on_body = proc do |chunk|
-          run_loop.log(:info, :got_dashboard_body, nil)
+          run_loop.log(:info, :rack_http_on_body, [http_parser.headers])
         end
 
         # Headers and body is all parsed
         http_parser.on_message_complete = proc do |env|
-          run_loop.log(:info, :dashboard_http_on_message_completed, nil)
+          run_loop.log(:info, :rack_http_on_message_completed, nil)
 
           env = {}
 
