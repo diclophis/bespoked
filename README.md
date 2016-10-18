@@ -3,3 +3,9 @@
 ![bespoked](images/bespoked.png)
 
 please contact `ops@mavenlink.com` for more details / help installing and running this project.
+
+## debugging
+
+```
+BESPOKED_WATCH_CLASS=DebugWatch BESPOKED_PROXY_CLASS=RackProxy bundle exec ruby main.rb
+```

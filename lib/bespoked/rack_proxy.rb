@@ -15,6 +15,7 @@ module Bespoked
 
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
+        @run_loop.log(:info, :vhosts_extracted, vhosts_for_ingress)
         vhosts_for_ingress.each do |host, service_name, upstreams|
           @run_loop.log(:info, :rack_proxy_vhost, [host, service_name, upstreams])
           @vhosts[host] = upstreams[0]
@@ -33,10 +34,11 @@ module Bespoked
 
     def handle_request(env)
       in_url = URI.parse("http://" + env["HTTP_HOST"])
+      out_url = nil
 
-      mapped_host_port = @vhosts[in_url.host]
-
-      out_url = URI.parse("http://" + mapped_host_port)
+      if mapped_host_port = @vhosts[in_url.host]
+        out_url = URI.parse("http://" + mapped_host_port)
+      end
 
       return out_url
     end

@@ -18,7 +18,7 @@ module Bespoked
               "kind": "Ingress",
               "apiVersion": "extensions/v1beta1",
               "metadata": {
-                  "name": "z04b6f-ven-unicorn-vhost",
+                  "name": "example-vhost",
                   "resourceVersion": "20361",
                   "labels": {
                       "ttl": "24"
@@ -29,12 +29,12 @@ module Bespoked
               "spec": {
                   "rules": [
                       {
-                          "host": "z437a2-d-ldm-update-6796.instastage.cash",
+                          "host": "example.ingress",
                           "http": {
                               "paths": [
                                   {
                                       "backend": {
-                                          "serviceName": "bardin.haus",
+                                          "serviceName": "w3.org",
                                           "servicePort": 80
                                       }
                                   }
@@ -54,7 +54,7 @@ module Bespoked
               "kind": "Service",
               "apiVersion": "v1",
               "metadata": {
-                  "name": "z494d5-bigmaven-unicorn",
+                  "name": "w3.org",
                   "resourceVersion": "20289",
                   "labels": {
                       "ttl": "24"
@@ -66,14 +66,14 @@ module Bespoked
                   "ports": [
                       {   
                           "protocol": "TCP",
-                          "port": 3001,
-                          "targetPort": 3001
+                          "port": 80,
+                          "targetPort": 80
                       }
                   ],
                   "selector": {
-                      "name": "zbea5d-d-ldm-update-6796"
+                      "name": "www.w3.org"
                   },
-                  "clusterIP": "10.254.145.20",
+                  "clusterIP": "127.0.0.1",
                   "type": "ClusterIP",
                   "sessionAffinity": "None"
               },
