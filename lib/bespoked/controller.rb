@@ -130,8 +130,8 @@ module Bespoked
         @stdout_pipe = @run_loop.pipe
         @stdout_pipe.open($stdout.fileno)
 
-        #self.dashboard = Dashboard.new(@run_loop)
-        #self.health = HealthService.new(@run_loop)
+        self.dashboard = Dashboard.new(@run_loop)
+        self.health = HealthService.new(@run_loop)
 
         self.proxy = @proxy_class.new(@run_loop, self)
         self.watch = @watch_class.new(@run_loop)

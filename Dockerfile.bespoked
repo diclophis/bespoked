@@ -11,7 +11,4 @@ USER bespoked
 RUN bundle check --path=vendor/bundle || bundle --path=vendor/bundle --jobs=4 --retry=3 --deployment
 ADD . /home/bespoked
 RUN bundle exec rake test
-USER root
-RUN chown -R bespoked. /home/bespoked
-USER bespoked
 CMD ["bundle", "exec" "ruby", "/home/bespoked/main.rb"]
