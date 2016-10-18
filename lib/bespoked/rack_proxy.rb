@@ -6,8 +6,6 @@ module Bespoked
 
     def initialize(run_loop_in, controller_in)
       super(run_loop_in, controller_in)
-
-      self.rack_handler = LibUVRackHandler.run(@run_loop, method(:handle_request), {:Port => 8181})
     end
 
     def install(ingress_descriptions)
@@ -23,6 +21,7 @@ module Bespoked
 
     def start
       @run_loop.log(:info, :rack_proxy_start, nil)
+      self.rack_handler = LibUVRackHandler.run(@run_loop, method(:handle_request), {:Port => 8181})
     end
 
     def stop

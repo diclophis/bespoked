@@ -8,9 +8,9 @@ module Bespoked
       options[:BindAddress] ||= "0.0.0.0"
       options[:Port] ||= 45678
 
-      server = run_loop.tcp
+      run_loop.log(:warn, :rack_options, [options])
 
-      puts options.inspect
+      server = run_loop.tcp
 
       server.bind(options[:BindAddress], options[:Port]) do |client|
         http_parser = Http::Parser.new

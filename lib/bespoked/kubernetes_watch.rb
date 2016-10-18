@@ -2,6 +2,8 @@
 
 module Bespoked
   class KubernetesWatch < Watch
+    WATCH_TIMEOUT = 1000 * 60 * 5
+
     def create(resource_kind, defer, json_parser)
       var_run_secrets_k8s_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
       var_run_secrets_k8s_crt_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
@@ -9,11 +11,13 @@ module Bespoked
       service_host = ENV["KUBERNETES_SERVICE_HOST"] || "127.0.0.1"
       service_port = ENV["KUBERNETES_SERVICE_PORT"] || "8443"
       bearer_token = ENV["KUBERNETES_DEV_BEARER_TOKEN"] || begin
-         unless File.exist?(var_run_secrets_k8s_token_path) && (File.size(var_run_secrets_k8s_token_path) > 0)
-           self.halt :k8s_token_not_ready
-         end
-
-         File.read(var_run_secrets_k8s_token_path).strip
+        if File.exist?(var_run_secrets_k8s_token_path) && (File.size(var_run_secrets_k8s_token_path) > 0)
+          File.read(var_run_secrets_k8s_token_path).strip
+        else
+          #self.halt :k8s_token_not_ready
+          @run_loop.log(:fatal, :kubernetes_watch_create, ["k8s_token not ready"])
+          ""	
+        end
       end
 
       get_watch = "GET #{self.path_for_watch(resource_kind)} HTTP/1.1\r\nHost: #{service_host}\r\nAuthorization: Bearer #{bearer_token}\r\nAccept: */*\r\nUser-Agent: bespoked\r\n\r\n"

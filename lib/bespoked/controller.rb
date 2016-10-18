@@ -8,9 +8,10 @@ module Bespoked
                   :checksum,
                   :watch,
                   :dashboard,
-                  :health
+                  :health,
+                  :watch_class,
+                  :proxy_class
 
-    WATCH_TIMEOUT = 1000 * 60 * 5
     RECONNECT_WAIT = 2000
     RECONNECT_TRIES = 60
     RELOAD_TIMEOUT = 2000
@@ -43,6 +44,9 @@ module Bespoked
     def initialize(options = {})
       self.descriptions = {}
       self.run_loop = Libuv::Loop.default
+
+      self.watch_class = Bespoked.const_get(options["watch-class"] || "KubernetesWatch")
+      self.proxy_class = Bespoked.const_get(options["proxy-class"] || "RackProxy")
     end
 
     def start_proxy
@@ -129,8 +133,8 @@ module Bespoked
         self.dashboard = Dashboard.new(@run_loop)
         self.health = HealthService.new(@run_loop)
 
-        self.proxy = RackProxy.new(@run_loop, self)
-        self.watch = CommandWatch.new(@run_loop)
+        self.proxy = @proxy_class.new(@run_loop, self)
+        self.watch = @watch_class.new(@run_loop)
 
         @run_loop.log(:info, :run_dir, @run_dir)
 

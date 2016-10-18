@@ -34,6 +34,23 @@ spec:
     k8s-app: bespoked
 ---
 apiVersion: v1
+kind: Service
+metadata:
+  name: bespoked-dashboard-service
+  namespace: default
+spec:
+  # The default backend must be of type NodePort.
+  type: NodePort
+  ports:
+  - nodePort: 30003
+    port: 8890
+    targetPort: 8183
+    protocol: TCP
+    name: http
+  selector:
+    k8s-app: bespoked
+---
+apiVersion: v1
 kind: ReplicationController
 metadata:
   name: bespoked-replication-controller
