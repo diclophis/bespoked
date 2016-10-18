@@ -129,7 +129,7 @@ module Bespoked
         self.dashboard = Dashboard.new(@run_loop)
         self.health = HealthService.new(@run_loop)
 
-        self.proxy = RackProxy.new(@run_loop)
+        self.proxy = RackProxy.new(@run_loop, self)
         self.watch = CommandWatch.new(@run_loop)
 
         @run_loop.log(:info, :run_dir, @run_dir)
