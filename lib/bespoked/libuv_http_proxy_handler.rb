@@ -5,8 +5,8 @@ module Bespoked
     def self.run(run_loop, app, options={})
       environment  = ENV['RACK_ENV'] || 'development'
 
-      options[:BindAddress] ||= "0.0.0.0"
-      options[:Port] ||= 45678
+      options[:BindAddress] ||= "0:0:0:0:0:0:0:0"
+      options[:Port] ||= 8888
 
       run_loop.log(:warn, :rack_options, [options])
 
@@ -14,7 +14,7 @@ module Bespoked
 
       uri = URI::Parser.new
 
-      server.bind(options[:BindAddress], options[:Port]) do |client|
+      server.bind(options[:BindAddress], options[:Port].to_i) do |client|
         http_parser = Http::Parser.new
 
         http_parser.on_headers_complete = proc do
@@ -55,7 +55,9 @@ module Bespoked
 
               new_client.start_read
             }, proc { |err|
+              #TODO: handle "type":"dns_error","message":["temporary failure","Libuv::Error::EAI_AGAIN"]
               run_loop.log(:warn, :dns_error, [err, err.class])
+              client.close
             })
           else
             client.close
@@ -73,7 +75,7 @@ module Bespoked
         client.start_read
       end
 
-      server.listen(1024)
+      return server
     end
 
     def self.send_headers(client, status, headers)

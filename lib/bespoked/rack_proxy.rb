@@ -25,7 +25,8 @@ module Bespoked
 
     def start
       @run_loop.log(:info, :rack_proxy_start, nil)
-      self.rack_handler = LibUVHttpProxyHandler.run(@run_loop, method(:handle_request), {:Port => 8181})
+      self.rack_handler = LibUVHttpProxyHandler.run(@run_loop, method(:handle_request), {:Port => 8888})
+      @rack_handler.listen(1024)
     end
 
     def stop

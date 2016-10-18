@@ -71,7 +71,7 @@ module Bespoked
         client.start_read
       end
 
-      server.listen(1024)
+      return server
     end
 
     def self.send_headers(client, status, headers)
