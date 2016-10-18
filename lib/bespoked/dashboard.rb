@@ -7,14 +7,19 @@ module Bespoked
 
     def initialize(run_loop_in)
       self.run_loop = run_loop_in
-      self.rack_handler = LibUVRackHandler.run(@run_loop, method(:handle_request), {:Port => 8890})
-      @rack_handler.listen(1024)
+      self.rack_handler = LibUVRackHandler.run(@run_loop, method(:handle_request), {:Port => 9800})
+    end
 
-      @run_loop.log(:info, :dashboard_init, nil)
+    def start
+      @run_loop.log(:info, :dashboard_start, nil)
+
+      @run_loop.next_tick do
+        @rack_handler.listen(1024).inspect
+      end
     end
 
     def handle_request(env)
-      ['200', {'Content-Type' => 'text/html'}, ["A barebones rack app. #{self.inspect}"]]
+      ['200', {'Content-Type' => 'text/html'}, ["Dashboard\r\n"]]
     end
   end
 end

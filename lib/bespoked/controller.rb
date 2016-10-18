@@ -50,15 +50,17 @@ module Bespoked
     end
 
     def start_proxy
-      @proxy.start
+      @proxy.start if @proxy
+      @health.start if @health
+      @dashboard.start if @dashboard
     end
 
     def stop_proxy
-      @proxy.stop
+      @proxy.stop if @proxy
     end
 
     def install_proxy(ingress_descriptions)
-      @proxy.install(ingress_descriptions)
+      @proxy.install(ingress_descriptions) if @proxy
     end
 
     def recheck
@@ -142,11 +144,10 @@ module Bespoked
         end
         @retry_timer.start(0, (RECONNECT_WAIT * 2))
 
+        self.watch = @watch_class.new(@run_loop)
+        self.proxy = @proxy_class.new(@run_loop, self)
         self.dashboard = Dashboard.new(@run_loop)
         self.health = HealthService.new(@run_loop)
-
-        self.proxy = @proxy_class.new(@run_loop, self)
-        self.watch = @watch_class.new(@run_loop)
       end
     end
 

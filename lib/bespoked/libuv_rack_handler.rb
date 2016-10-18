@@ -5,21 +5,23 @@ module Bespoked
     def self.run(run_loop, app, options={})
       environment  = ENV['RACK_ENV'] || 'development'
 
-      options[:BindAddress] ||= "0:0:0:0:0:0:0:0"
+      options[:BindAddress] = "::"
       options[:Port] ||= 1234
 
-      run_loop.log(:info, :rack_options, [options])
+      #run_loop.log(:info, :rack_options, [options])
 
       server = run_loop.tcp
 
-      uri = URI::Parser.new
+      server.catch do |reason|
+        run_loop.log(:error, :rack_handler_server_error, [reason, reason.class])
+      end
 
-      server.bind(options[:BindAddress], options[:Port]) do |client|
+      server.bind(options[:BindAddress], options[:Port].to_i) do |client|
         http_parser = Http::Parser.new
 
         # HTTP headers available
         http_parser.on_headers_complete = proc do
-          url = uri.parse("http://" + http_parser.headers["Host"])
+          url = URI.parse("http://" + http_parser.headers["Host"])
           host = url.host
           port = url.port
 
