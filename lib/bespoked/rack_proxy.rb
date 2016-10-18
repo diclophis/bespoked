@@ -29,7 +29,7 @@ module Bespoked
     end
 
     def handle_request(env)
-      ['200', {'Content-Type' => 'text/html'}, ["A barebones rack app. #{self.inspect}"]]
+      ['200', {'Content-Type' => 'text/html'}, ["This should be ingress upstream"]]
     end
   end
 end
