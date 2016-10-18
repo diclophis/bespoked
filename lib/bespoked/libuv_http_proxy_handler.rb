@@ -8,7 +8,7 @@ module Bespoked
       options[:BindAddress] ||= "0:0:0:0:0:0:0:0"
       options[:Port] ||= 1234
 
-      run_loop.log(:warn, :rack_options, [options])
+      run_loop.log(:info, :rack_options, [options])
 
       server = run_loop.tcp
 

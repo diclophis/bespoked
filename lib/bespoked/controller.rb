@@ -130,14 +130,6 @@ module Bespoked
         @stdout_pipe = @run_loop.pipe
         @stdout_pipe.open($stdout.fileno)
 
-        self.dashboard = Dashboard.new(@run_loop)
-        self.health = HealthService.new(@run_loop)
-
-        self.proxy = @proxy_class.new(@run_loop, self)
-        self.watch = @watch_class.new(@run_loop)
-
-        @run_loop.log(:info, :run_dir, @run_dir)
-
         logger.progress do |level, type, message, _not_used|
           error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
           @stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
@@ -149,6 +141,12 @@ module Bespoked
           self.connect(proceed_to_emit_conf)
         end
         @retry_timer.start(0, (RECONNECT_WAIT * 2))
+
+        self.dashboard = Dashboard.new(@run_loop)
+        self.health = HealthService.new(@run_loop)
+
+        self.proxy = @proxy_class.new(@run_loop, self)
+        self.watch = @watch_class.new(@run_loop)
       end
     end
 
