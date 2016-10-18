@@ -10,7 +10,7 @@ spec:
   ports:
   - nodePort: 30001
     port: 8888
-    targetPort: 8181
+    targetPort: 8888
     protocol: TCP
     name: http
   selector:
@@ -27,7 +27,7 @@ spec:
   ports:
   - nodePort: 30002
     port: 8889
-    targetPort: 8182
+    targetPort: 8889
     protocol: TCP
     name: http
   selector:
@@ -44,7 +44,7 @@ spec:
   ports:
   - nodePort: 30003
     port: 8890
-    targetPort: 8183
+    targetPort: 8890
     protocol: TCP
     name: http
   selector:
