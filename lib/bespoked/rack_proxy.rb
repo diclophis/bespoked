@@ -15,17 +15,16 @@ module Bespoked
 
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
-        @run_loop.log(:info, :vhosts_extracted, vhosts_for_ingress)
+        #@run_loop.log(:info, :vhosts_extracted, vhosts_for_ingress)
         vhosts_for_ingress.each do |host, service_name, upstreams|
-          @run_loop.log(:info, :rack_proxy_vhost, [host, service_name, upstreams])
+          #@run_loop.log(:info, :rack_proxy_vhost, [host, service_name, upstreams])
           @vhosts[host] = upstreams[0]
         end
       end
     end
 
     def start
-      self.rack_handler = LibUVHttpProxyHandler.run(@run_loop, method(:handle_request), {:Port => 8888})
-      @rack_handler.listen(16)
+      self.rack_handler = LibUVHttpProxyHandler.new(@run_loop, method(:handle_request), {:Port => 8888})
       @run_loop.log(:info, :rack_proxy_start, nil)
     end
 

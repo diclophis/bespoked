@@ -49,8 +49,13 @@ module Bespoked
       self.proxy_class = Bespoked.const_get(options["proxy-class"] || "RackProxy")
     end
 
-    def start_proxy
-      @run_loop.log :info, :start_proxy, [@proxy, @health, @dashboard]
+    def start
+      @run_loop.log :info, :controller_start, [@proxy, @health, @dashboard]
+
+        self.watch = @watch_class.new(@run_loop)
+        self.proxy = @proxy_class.new(@run_loop, self)
+        self.dashboard = Dashboard.new(@run_loop)
+        self.health = HealthService.new(@run_loop)
 
       @proxy.start if @proxy
       @health.start if @health
@@ -68,8 +73,9 @@ module Bespoked
     def recheck
       old_checksum = @checksum
       @checksum = Digest::MD5.hexdigest(Marshal.dump(@descriptions))
-      @run_loop.log :info, :checksum, [old_checksum, @checksum]
-      return @checksum != old_checksum
+      changed = @checksum != old_checksum
+      @run_loop.log :info, :checksum, [old_checksum, @checksum] if changed
+      return changed
     end
 
     def halt(message)
@@ -94,8 +100,12 @@ module Bespoked
           self.handle_event(event)
         end
 
-        reconnect_loop = @watch.create(resource_kind, defer, json_parser)
-        reconnect_loop.then do
+        if @watch
+          reconnect_loop = @watch.create(resource_kind, defer, json_parser)
+          reconnect_loop.then do
+            proceed_with_reconnect.call
+          end
+        else
           proceed_with_reconnect.call
         end
       end
@@ -146,10 +156,6 @@ module Bespoked
         end
         @retry_timer.start(RECONNECT_WAIT, 0)
 
-        self.watch = @watch_class.new(@run_loop)
-        self.proxy = @proxy_class.new(@run_loop, self)
-        self.dashboard = Dashboard.new(@run_loop)
-        self.health = HealthService.new(@run_loop)
       end
     end
 
@@ -157,8 +163,7 @@ module Bespoked
       @heartbeat = @run_loop.timer
 
       @heartbeat.progress do
-        @run_loop.log(:info, :heartbeat_progress)
-
+        #@run_loop.log(:info, :heartbeat_progress)
         if ingress_descriptions = @descriptions["ingress"]
           self.install_proxy(ingress_descriptions)
         end
@@ -168,7 +173,7 @@ module Bespoked
 
       #TODO: what is this defer for???
       defer.promise.then do
-        self.start_proxy
+        self.start
       end
 
       return defer
@@ -207,7 +212,7 @@ module Bespoked
 
         unless (kind == "Endpoints" && name == "kubernetes")
           #NOTE: kubernetes api-server endpoints are not logged, dont name your branch kubernetes
-          @run_loop.log :info, :event, [type, kind, name]
+          #@run_loop.log :info, :event, [type, kind, name]
         end
 
         case kind

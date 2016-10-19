@@ -39,7 +39,7 @@ module Bespoked
         if http = rule["http"]
           http["paths"].each do |http_path|
             service_name = http_path["backend"]["serviceName"]
-            if service = @controller.locate_service(service_name)
+            if @controller && service = @controller.locate_service(service_name)
               if spec = service["spec"]
                 upstreams = []
                 if ports = spec["ports"]
