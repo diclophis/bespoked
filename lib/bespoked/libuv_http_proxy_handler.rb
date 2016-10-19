@@ -5,7 +5,7 @@ module Bespoked
     def self.run(run_loop, app, options={})
       environment  = ENV['RACK_ENV'] || 'development'
 
-      options[:BindAddress] ||= "0:0:0:0:0:0:0:0"
+      options[:BindAddress] = "0:0:0:0:0:0:0:0"
       options[:Port] ||= 1234
 
       run_loop.log(:info, :rack_options, [options])

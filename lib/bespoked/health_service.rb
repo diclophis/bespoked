@@ -11,11 +11,8 @@ module Bespoked
     end
 
     def start
+      @rack_handler.listen(16)
       @run_loop.log(:info, :health_start, nil)
-
-      @run_loop.next_tick do
-        @rack_handler.listen(1024)
-      end
     end
 
     def handle_request(env)

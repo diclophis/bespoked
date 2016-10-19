@@ -5,10 +5,10 @@ module Bespoked
     def self.run(run_loop, app, options={})
       environment  = ENV['RACK_ENV'] || 'development'
 
-      options[:BindAddress] = "::"
+      options[:BindAddress] = "127.0.0.1"
       options[:Port] ||= 1234
 
-      #run_loop.log(:info, :rack_options, [options])
+      run_loop.log(:info, :rack_options, [options])
 
       server = run_loop.tcp
 

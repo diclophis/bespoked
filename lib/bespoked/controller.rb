@@ -12,9 +12,9 @@ module Bespoked
                   :watch_class,
                   :proxy_class
 
-    RECONNECT_WAIT = 1000
-    RECONNECT_TRIES = 60
-    RELOAD_TIMEOUT = 2000
+    RECONNECT_WAIT = 500
+    FAILED_TO_AUTH_TIMEOUT = 30000
+    RELOAD_TIMEOUT = 1
 
     KINDS = ["pod", "service", "ingress", "endpoint"]
     KINDS.each do |kind|
@@ -50,6 +50,8 @@ module Bespoked
     end
 
     def start_proxy
+      @run_loop.log :info, :start_proxy, [@proxy, @health, @dashboard]
+
       @proxy.start if @proxy
       @health.start if @health
       @dashboard.start if @dashboard
@@ -121,7 +123,7 @@ module Bespoked
       end
 
       @failed_to_auth_timeout = @run_loop.timer
-      @failed_to_auth_timeout.start(RECONNECT_WAIT * RECONNECT_TRIES, 0)
+      @failed_to_auth_timeout.start(FAILED_TO_AUTH_TIMEOUT, 0)
       @failed_to_auth_timeout.progress do
         self.halt :no_ok_auth_failed
       end
@@ -142,7 +144,7 @@ module Bespoked
         @retry_timer.progress do
           self.connect(proceed_to_emit_conf)
         end
-        @retry_timer.start(0, (RECONNECT_WAIT * 2))
+        @retry_timer.start(RECONNECT_WAIT, 0)
 
         self.watch = @watch_class.new(@run_loop)
         self.proxy = @proxy_class.new(@run_loop, self)
