@@ -43,7 +43,7 @@ module Bespoked
 
     def initialize(options = {})
       self.descriptions = {}
-      self.run_loop = Libuv::Loop.default
+      self.run_loop = Libuv::Reactor.default #Libuv::Reactor.new #Libuv::Loop.default
 
       self.watch_class = Bespoked.const_get(options["watch-class"] || "KubernetesWatch")
       self.proxy_class = Bespoked.const_get(options["proxy-class"] || "RackProxy")
@@ -132,7 +132,7 @@ module Bespoked
         @stdout_pipe = @run_loop.pipe
         @stdout_pipe.open($stdout.fileno)
 
-        logger.progress do |level, type, message, _not_used|
+        logger.notifier do |level, type, message, _not_used|
           error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
           @stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
           @stdout_pipe.write($/)

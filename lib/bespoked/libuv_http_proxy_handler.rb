@@ -26,7 +26,7 @@ module Bespoked
 
             run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
 
-            run_loop.lookup(host).then(proc { |addrinfo|
+            run_loop.lookup(host, {:wait => false}).then(proc { |addrinfo|
               ip_address = addrinfo[0][0]
               run_loop.log(:info, :ip_lookup, [host, ip_address])
 
