@@ -52,11 +52,6 @@ module Bespoked
     def start
       @run_loop.log :info, :controller_start, [@proxy, @health, @dashboard]
 
-        self.watch = @watch_class.new(@run_loop)
-        self.proxy = @proxy_class.new(@run_loop, self)
-        self.dashboard = Dashboard.new(@run_loop)
-        self.health = HealthService.new(@run_loop)
-
       @proxy.start if @proxy
       @health.start if @health
       @dashboard.start if @dashboard
@@ -156,6 +151,10 @@ module Bespoked
         end
         @retry_timer.start(RECONNECT_WAIT, 0)
 
+        self.watch = @watch_class.new(@run_loop)
+        self.proxy = @proxy_class.new(@run_loop, self)
+        self.dashboard = Dashboard.new(@run_loop)
+        self.health = HealthService.new(@run_loop)
       end
     end
 

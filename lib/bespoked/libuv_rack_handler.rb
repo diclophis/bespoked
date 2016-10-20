@@ -20,7 +20,7 @@ module Bespoked
       end
 
       server.bind(options[:BindAddress], options[:Port].to_i) do |client|
-        #handle_client(client)
+        handle_client(client)
       end
 
       server.listen(16)
