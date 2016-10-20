@@ -1,7 +1,7 @@
 GIT
   remote: https://github.com/mavenlink/libuv.git
-  revision: 3de145278ba0df63aedc0e148decbc7149cd235a
-  branch: with-upstream-latest
+  revision: d2b49778ec53252372dd3ac527b97a0367d73f4b
+  branch: fix-uv-tcp-bind-argument-map
   specs:
     libuv (3.0.0)
       concurrent-ruby (~> 1.0)

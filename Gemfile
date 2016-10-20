@@ -4,7 +4,7 @@ source 'https://rubygems.org'
 gem 'yajl-ruby'
 
 # Ruby bindings for libuv
-gem 'libuv', :git => "https://github.com/mavenlink/libuv.git", :branch => "with-upstream-latest"
+gem 'libuv', :git => "https://github.com/mavenlink/libuv.git", :branch => "fix-uv-tcp-bind-argument-map"
 
 # simple callback-based HTTP request/response parser
 gem 'http_parser.rb'
