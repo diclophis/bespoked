@@ -38,18 +38,42 @@ module Bespoked
 
           run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
 
-          run_loop.lookup(host, {:wait => false}).then(proc { |addrinfo|
+          on_dns_bad = proc { |err|
+            run_loop.log(:warn, :dns_error, [err, err.class])
+            client.close
+          }
+
+          on_dns_ok = proc { |addrinfo|
             ip_address = addrinfo[0][0]
-            run_loop.log(:info, :ip_lookup, [host, ip_address])
+
+            run_loop.log(:info, :ip_lookup, [host, ip_address, port.to_i, client.sockname, client.peername])
 
             new_client = run_loop.tcp
+
+            new_client.catch do |err|
+              run_loop.log(:warn, :rack_proxy_client_error, [err, err.class])
+              client.close
+            end
+
             new_client.connect(ip_address, port.to_i) do |up_client|
               up_client.write("GET / HTTP/1.1\r\n")
-              http_parser.headers.each { |k, vs|
+
+              proxy_override_headers = {
+                "X-Forwarded-For" => client.peername[0], # NOTE: makes the actual IP available
+                "X-Forwarded-Proto" => "https", # NOTE: this is what allows unicorn to not be SSL, assumed SSL termination elsewhere
+                "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
+                "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning
+                "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
+              }
+
+              headers_for_upstream_request = http_parser.headers.merge(proxy_override_headers)
+
+              headers_for_upstream_request.each { |k, vs|
                 vs.split("\n").each { |v|
                   up_client.write "#{k}: #{v}\r\n"
                 }
               }
+
               http_parser = nil
               up_client.write("\r\n")
               up_client.progress do |chunk|
@@ -61,16 +85,14 @@ module Bespoked
               end
             end
 
-            new_client.catch do |err|
-              run_loop.log(:warn, :rack_proxy_client_error, [err, err.class])
-            end
-
             new_client.start_read
-          }, proc { |err|
-            #TODO: handle "type":"dns_error","message":["temporary failure","Libuv::Error::EAI_AGAIN"]
-            run_loop.log(:warn, :dns_error, [err, err.class])
-            client.close
-          })
+          }
+
+          do_dns_lookup = proc {
+            run_loop.lookup(host, {:wait => false}).then(on_dns_ok, on_dns_bad)
+          }
+
+          do_dns_lookup.call
         else
           client.close
         end
