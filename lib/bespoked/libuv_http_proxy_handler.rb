@@ -60,7 +60,7 @@ module Bespoked
 
               proxy_override_headers = {
                 "X-Forwarded-For" => client.peername[0], # NOTE: makes the actual IP available
-                "X-Forwarded-Proto" => "https", # NOTE: this is what allows unicorn to not be SSL, assumed SSL termination elsewhere
+                #"X-Forwarded-Proto" => "HTTPS", # NOTE: this is what allows unicorn to not be SSL, assumed SSL termination elsewhere
                 "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
                 "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning
                 "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
@@ -73,6 +73,8 @@ module Bespoked
                   up_client.write "#{k}: #{v}\r\n"
                 }
               }
+
+              run_loop.log(:debug, :wrote_upstream_request, [headers_for_upstream_request])
 
               http_parser = nil
               up_client.write("\r\n")
