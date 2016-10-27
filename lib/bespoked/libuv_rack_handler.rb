@@ -31,7 +31,9 @@ module Bespoked
 
       # HTTP headers available
       http_parser.on_headers_complete = proc do
-        url = URI.parse("http://" + http_parser.headers["Host"])
+        @run_loop.log(:debug, :http_rack_headers, http_parser.headers)
+
+        url = URI.parse("http://" + (http_parser.headers["host"] || http_parser.headers["Host"]))
         host = url.host
         port = url.port
 
@@ -68,6 +70,13 @@ module Bespoked
         env['REQUEST_PATH'] = http_parser.request_url
 
         status, headers, body = @app.call(env)
+
+        length = 0
+        body.each { |b|
+          length += b.length
+        }
+
+        headers["Content-Length"] = length.to_s
 
         send_headers client, status, headers
         send_body client, body
