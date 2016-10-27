@@ -81,6 +81,8 @@ module Bespoked
         send_headers client, status, headers
         send_body client, body
         client.close
+
+        @run_loop.log(:debug, :rack_http_sent_response, [status, headers, body])
       end
 
       ##################

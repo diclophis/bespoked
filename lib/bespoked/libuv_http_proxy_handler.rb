@@ -30,7 +30,7 @@ module Bespoked
       http_parser = Http::Parser.new
 
       http_parser.on_headers_complete = proc do
-        env = {"HTTP_HOST" => http_parser.headers["Host"]}
+        env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
 
         if url = app.call(env)
           host = url.host
@@ -56,10 +56,10 @@ module Bespoked
             end
 
             new_client.connect(ip_address, port.to_i) do |up_client|
-              up_client.write("GET / HTTP/1.1\r\n")
+              up_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n")
 
               proxy_override_headers = {
-                "X-Forwarded-For" => client.peername[0], # NOTE: makes the actual IP available
+                "X-Forwarded-For" => client.peername[0] || "", # NOTE: makes the actual IP available
                 #"X-Forwarded-Proto" => "HTTPS", # NOTE: this is what allows unicorn to not be SSL, assumed SSL termination elsewhere
                 "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
                 "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning
@@ -70,7 +70,9 @@ module Bespoked
 
               headers_for_upstream_request.each { |k, vs|
                 vs.split("\n").each { |v|
-                  up_client.write "#{k}: #{v}\r\n"
+                  if k && v
+                    up_client.write "#{k}: #{v}\r\n"
+                  end
                 }
               }
 
@@ -79,11 +81,15 @@ module Bespoked
               http_parser = nil
               up_client.write("\r\n")
               up_client.progress do |chunk|
-                client.write(chunk)
+                if client && chunk && chunk.length > 0
+                  client.write(chunk)
+                end
               end
 
               client.progress do |chunk|
-                up_client.write(chunk)
+                if up_client && chunk && chunk.length > 0
+                  up_client.write(chunk)
+                end
               end
             end
 
@@ -104,7 +110,9 @@ module Bespoked
 
       client.progress do |chunk|
         if http_parser
-          http_parser << chunk
+          if chunk && chunk.length > 0
+            http_parser << chunk
+          end
         end
       end
 
@@ -123,7 +131,9 @@ module Bespoked
 
     def send_body(client, body)
       body.each { |part|
-        client.write part
+        if part && part.length > 0
+          client.write part
+        end
       }
     end
 
