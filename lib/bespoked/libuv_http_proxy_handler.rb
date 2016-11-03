@@ -28,8 +28,11 @@ module Bespoked
 
     def handle_client(client)
       http_parser = Http::Parser.new
+      reading_state = :request_to_proxy
 
       http_parser.on_headers_complete = proc do
+        reading_state = :request_to_upstream
+
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
 
         if url = app.call(env)
@@ -59,12 +62,16 @@ module Bespoked
               up_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n")
 
               proxy_override_headers = {
+                "Connection" => "close",
                 "X-Forwarded-For" => client.peername[0] || "", # NOTE: makes the actual IP available
-                #"X-Forwarded-Proto" => "HTTPS", # NOTE: this is what allows unicorn to not be SSL, assumed SSL termination elsewhere
                 "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
                 "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning
                 "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
               }
+
+              if ENV["MOCK_X_FORWARDED_PROTO"]
+                proxy_override_headers["X-Forwarded-Proto"] = ENV["MOCK_X_FORWARDED_PROTO"] # NOTE: this is what allows unicorn to not be SSL, assumed SSL termination elsewhere
+              end
 
               headers_for_upstream_request = http_parser.headers.merge(proxy_override_headers)
 
@@ -78,8 +85,13 @@ module Bespoked
 
               run_loop.log(:debug, :wrote_upstream_request, [headers_for_upstream_request])
 
-              http_parser = nil
+              #http_parser = nil
               up_client.write("\r\n")
+              if http_parser.upgrade_data
+                up_client.write(http_parser.upgrade_data)
+              end
+              http_parser.reset!
+
               up_client.progress do |chunk|
                 if client && chunk && chunk.length > 0
                   client.write(chunk)
@@ -87,8 +99,10 @@ module Bespoked
               end
 
               client.progress do |chunk|
-                if up_client && chunk && chunk.length > 0
-                  up_client.write(chunk)
+                if reading_state == :request_to_upstream
+                  if up_client && chunk && chunk.length > 0
+                    up_client.write(chunk)
+                  end
                 end
               end
             end
@@ -104,12 +118,14 @@ module Bespoked
         else
           client.close
         end
+
+        :stop
       end
 
       ##################
 
       client.progress do |chunk|
-        if http_parser
+        if http_parser && reading_state == :request_to_proxy
           if chunk && chunk.length > 0
             http_parser << chunk
           end
