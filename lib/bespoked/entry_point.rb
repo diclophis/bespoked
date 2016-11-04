@@ -1,7 +1,7 @@
 #
 
 module Bespoked
-  class Controller
+  class EntryPoint
     attr_accessor :proxy,
                   :descriptions,
                   :run_loop,
@@ -10,7 +10,11 @@ module Bespoked
                   :dashboard,
                   :health,
                   :watch_class,
-                  :proxy_class
+                  :proxy_class,
+                  :failure_to_auth_timer,
+                  :authenticated,
+                  :stopping,
+                  :heartbeat
 
     RECONNECT_WAIT = 500
     FAILED_TO_AUTH_TIMEOUT = 30000
@@ -41,12 +45,14 @@ module Bespoked
       end
     end
 
-    def initialize(options = {})
+    def initialize(run_loop_in, options = {})
       self.descriptions = {}
-      self.run_loop = Libuv::Reactor.default #Libuv::Reactor.new #Libuv::Loop.default
+      self.run_loop = run_loop_in #Libuv::Reactor.default #Libuv::Reactor.new #Libuv::Loop.default
+      self.authenticated = false
+      self.stopping = false
 
-      self.watch_class = Bespoked.const_get(options["watch-class"] || "KubernetesWatch")
-      self.proxy_class = Bespoked.const_get(options["proxy-class"] || "RackProxy")
+      #self.watch_class = Bespoked.const_get(options["watch-class"] || "KubernetesWatch")
+      #self.proxy_class = Bespoked.const_get(options["proxy-class"] || "RackProxy")
     end
 
     def start
@@ -61,8 +67,10 @@ module Bespoked
       @proxy.stop if @proxy
     end
 
-    def install_proxy(ingress_descriptions)
-      @proxy.install(ingress_descriptions) if @proxy
+    def install_proxy
+      if ingress_descriptions = @descriptions["ingress"]
+        @proxy.install(ingress_descriptions) if @proxy
+      end
     end
 
     def recheck
@@ -73,10 +81,15 @@ module Bespoked
       return changed
     end
 
+    def running?
+      !@stopping
+    end
+
     def halt(message)
-      self.stop_proxy
-      @run_loop.log(:info, :halt, message)
-      @run_loop.stop
+      #self.stop_proxy
+      #@run_loop.log(:info, :halt, message)
+      #@run_loop.stop
+      @stopping = true
     end
 
     def pipe(resource_kind)
@@ -110,31 +123,20 @@ module Bespoked
       return defer.promise
     end
 
-    def ingress
-      @run_loop.signal(:INT) do |_sigint|
-        self.halt :run_loop_interupted
-      end
-
-      @run_loop.signal(:HUP) do |_sigint|
-        self.halt :run_loop_hangup
-      end
-
-      @run_loop.signal(3) do |_sigint|
-        self.halt :run_loop_quit
-      end
-
-      @run_loop.signal(15) do |_sigint|
-        self.halt :run_loop_terminated
-      end
-
-      @failed_to_auth_timeout = @run_loop.timer
-      @failed_to_auth_timeout.start(FAILED_TO_AUTH_TIMEOUT, 0)
-      @failed_to_auth_timeout.progress do
+    def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT)
+      @failure_to_auth_timer = @run_loop.timer
+      @failure_to_auth_timer.progress do
         self.halt :no_ok_auth_failed
       end
+      @failure_to_auth_timer.start(fail_after_milliseconds, 0)
 
+      self.install_heartbeat
+
+=begin
       proceed_to_emit_conf = self.install_heartbeat
+=end
 
+=begin
       @run_loop.run do |logger|
         @stdout_pipe = @run_loop.pipe
         @stdout_pipe.open($stdout.fileno)
@@ -156,18 +158,20 @@ module Bespoked
         self.dashboard = Dashboard.new(@run_loop)
         self.health = HealthService.new(@run_loop)
       end
+=end
+    
+      yield if block_given?
     end
 
     def install_heartbeat
-      @heartbeat = @run_loop.timer
+      self.heartbeat = @run_loop.timer
 
       @heartbeat.progress do
         #@run_loop.log(:info, :heartbeat_progress)
-        if ingress_descriptions = @descriptions["ingress"]
-          self.install_proxy(ingress_descriptions)
-        end
+        self.install_proxy
       end
 
+=begin
       defer = @run_loop.defer
 
       #TODO: what is this defer for???
@@ -176,6 +180,14 @@ module Bespoked
       end
 
       return defer
+=end
+    end
+
+    def resolve_authentication!(proceed = nil)
+      #@retry_timer.stop
+      @failure_to_auth_timer.stop
+      @authenticated = true
+      proceed.resolve if proceed
     end
 
     def connect(proceed)
@@ -187,9 +199,7 @@ module Bespoked
         auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
 
         if auth_ok
-          @retry_timer.stop
-          @failed_to_auth_timeout.stop
-          proceed.resolve
+          self.resolve_authentication!(proceed)
         end
       end
     end

@@ -1,22 +1,25 @@
 #
 
 module Bespoked
-  autoload :LibUVRackHandler, 'bespoked/libuv_rack_handler'
-  autoload :LibUVHttpProxyHandler, 'bespoked/libuv_http_proxy_handler'
+  # bind... are "servers"
+  # autoload :LibUVRackHandler, 'bespoked/libuv_rack_handler'
+  # autoload :LibUVHttpProxyHandler, 'bespoked/libuv_http_proxy_handler'
 
-  autoload :Controller, 'bespoked/controller'
-  autoload :Dashboard, 'bespoked/dashboard'
-  autoload :HealthService, 'bespoked/health_service'
+  # "entrypoint"
+  autoload :EntryPoint, 'bespoked/entry_point'
 
-  autoload :Proxy, 'bespoked/proxy'
-  autoload :Watch, 'bespoked/watch'
+  # "apps"
+  # autoload :Dashboard, 'bespoked/dashboard'
+  # autoload :HealthService, 'bespoked/health_service'
 
-  #autoload :Proxy, 'bespoked/proxy'
-  autoload :DebugWatch, 'bespoked/debug_watch'
+  # k8s resource "watchers"
+  # autoload :Watch, 'bespoked/watch'
+  # autoload :DebugWatch, 'bespoked/debug_watch'
+  # autoload :KubernetesWatch, 'bespoked/kubernetes_watch'
+  # autoload :CommandWatch, 'bespoked/command_watch'
 
-  autoload :NginxProxy, 'bespoked/nginx_proxy'
-  autoload :KubernetesWatch, 'bespoked/kubernetes_watch'
-
-  autoload :RackProxy, 'bespoked/rack_proxy'
-  autoload :CommandWatch, 'bespoked/command_watch'
+  # "controllers"
+  # autoload :Proxy, 'bespoked/proxy'
+  # autoload :NginxProxy, 'bespoked/nginx_proxy'
+  # autoload :RackProxy, 'bespoked/rack_proxy'
 end

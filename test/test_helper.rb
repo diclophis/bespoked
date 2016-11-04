@@ -1,5 +1,7 @@
 ENV['RUBY_ENV'] ||= 'test'
 
+Thread.abort_on_exception = true
+
 require File.expand_path('../../config/environment', __FILE__)
 
 require 'minitest/autorun'
