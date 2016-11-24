@@ -6,19 +6,21 @@ module Bespoked
                   :descriptions,
                   :run_loop,
                   :checksum,
-                  :watch,
+                  :watch_factory,
+                  :watch_factory_class,
+                  :watches,
                   :dashboard,
                   :health,
-                  :watch_class,
                   :proxy_class,
                   :failure_to_auth_timer,
+                  :reconnect_timer,
                   :authenticated,
                   :stopping,
                   :heartbeat
 
-    RECONNECT_WAIT = 500
-    FAILED_TO_AUTH_TIMEOUT = 30000
-    RELOAD_TIMEOUT = 1
+    RECONNECT_WAIT = 60000
+    FAILED_TO_AUTH_TIMEOUT = 5000
+    RELOAD_TIMEOUT = 100
 
     KINDS = ["pod", "service", "ingress", "endpoint"]
     KINDS.each do |kind|
@@ -45,29 +47,30 @@ module Bespoked
       end
     end
 
-    def initialize(run_loop_in, options = {})
+    def initialize(run_loop_in, list_of_resources_to_watch = [], options = {})
       self.descriptions = {}
-      self.run_loop = run_loop_in #Libuv::Reactor.default #Libuv::Reactor.new #Libuv::Loop.default
+      self.run_loop = run_loop_in
       self.authenticated = false
       self.stopping = false
 
-      #self.watch_class = Bespoked.const_get(options["watch-class"] || "KubernetesWatch")
       #self.proxy_class = Bespoked.const_get(options["proxy-class"] || "RackProxy")
-    end
 
-    def start
-      @run_loop.log :info, :controller_start, [@proxy, @health, @dashboard]
+      self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "DebugWatchFactory")
+      self.watch_factory = @watch_factory_class.new(@run_loop)
 
-      @proxy.start if @proxy
-      @health.start if @health
-      @dashboard.start if @dashboard
-    end
-
-    def stop_proxy
-      @proxy.stop if @proxy
+      self.watches = list_of_resources_to_watch.collect do |resource_to_watch|
+        #@run_loop.log :info, :creating_watch, [resource_to_watch]
+        watch = @watch_factory.create(resource_to_watch)
+        watch.on_event do |event|
+          self.handle_event(event)
+        end
+        watch
+      end
     end
 
     def install_proxy
+      @run_loop.log :info, :install_proxy, []
+
       if ingress_descriptions = @descriptions["ingress"]
         @proxy.install(ingress_descriptions) if @proxy
       end
@@ -86,80 +89,34 @@ module Bespoked
     end
 
     def halt(message)
-      #self.stop_proxy
-      #@run_loop.log(:info, :halt, message)
-      #@run_loop.stop
       @stopping = true
     end
 
-    def pipe(resource_kind)
-      defer = @run_loop.defer
-
-      reconnect_timer = @run_loop.timer
-
-      proceed_with_reconnect = proc {
-        reconnect_timer.stop
-        reconnect_timer.start(RECONNECT_WAIT, 0)
-      }
-
-      reconnect_timer.progress do
-        json_parser = Yajl::Parser.new
-        json_parser.on_parse_complete = proc do |event|
-          self.handle_event(event)
-        end
-
-        if @watch
-          reconnect_loop = @watch.create(resource_kind, defer, json_parser)
-          reconnect_loop.then do
-            proceed_with_reconnect.call
-          end
-        else
-          proceed_with_reconnect.call
-        end
-      end
-
-      proceed_with_reconnect.call
-
-      return defer.promise
+    def on_failed_to_auth_cb
+      self.halt :no_ok_auth_failed
     end
 
-    def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT)
-      @failure_to_auth_timer = @run_loop.timer
+    def on_reconnect_cb
+      self.connect(nil)
+    end
+
+    def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT, reconnect_wait = RECONNECT_WAIT)
+      @run_loop.log :info, :run_ingress_controller, []
+
+      self.failure_to_auth_timer = @run_loop.timer
       @failure_to_auth_timer.progress do
-        self.halt :no_ok_auth_failed
+        self.on_failed_to_auth_cb
       end
       @failure_to_auth_timer.start(fail_after_milliseconds, 0)
 
       self.install_heartbeat
 
-=begin
-      proceed_to_emit_conf = self.install_heartbeat
-=end
-
-=begin
-      @run_loop.run do |logger|
-        @stdout_pipe = @run_loop.pipe
-        @stdout_pipe.open($stdout.fileno)
-
-        logger.notifier do |level, type, message, _not_used|
-          error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
-          @stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
-          @stdout_pipe.write($/)
-        end
-
-        @retry_timer = @run_loop.timer
-        @retry_timer.progress do
-          self.connect(proceed_to_emit_conf)
-        end
-        @retry_timer.start(RECONNECT_WAIT, 0)
-
-        self.watch = @watch_class.new(@run_loop)
-        self.proxy = @proxy_class.new(@run_loop, self)
-        self.dashboard = Dashboard.new(@run_loop)
-        self.health = HealthService.new(@run_loop)
+      self.reconnect_timer = @run_loop.timer
+      @reconnect_timer.progress do
+        self.on_reconnect_cb
       end
-=end
-    
+      @reconnect_timer.start(0, reconnect_wait)
+
       yield if block_given?
     end
 
@@ -167,38 +124,27 @@ module Bespoked
       self.heartbeat = @run_loop.timer
 
       @heartbeat.progress do
-        #@run_loop.log(:info, :heartbeat_progress)
+        @run_loop.log :info, :heartbeat_progress, []
         self.install_proxy
       end
-
-=begin
-      defer = @run_loop.defer
-
-      #TODO: what is this defer for???
-      defer.promise.then do
-        self.start
-      end
-
-      return defer
-=end
     end
 
     def resolve_authentication!(proceed = nil)
-      #@retry_timer.stop
       @failure_to_auth_timer.stop
       @authenticated = true
-      proceed.resolve if proceed
     end
 
     def connect(proceed)
-      ing_ok = self.pipe("ingresses")
-      ser_ok = self.pipe("services")
-      pod_ok = self.pipe("pods")
+      @watches.each do |watch|
+        watch.restart
+      end
 
-      @run_loop.finally(ing_ok, ser_ok, pod_ok).then do |deferred_auths|
-        auth_ok = deferred_auths.all? { |http_ok, resolved| http_ok }
+      promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }
 
-        if auth_ok
+      @run_loop.finally(@watches).then do |watch_authentication_promises|
+        all_watches_authed_ok = watch_authentication_promises.all? { |http_ok, resolved| http_ok }
+
+        if all_watches_authed_ok
           self.resolve_authentication!(proceed)
         end
       end

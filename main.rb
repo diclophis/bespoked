@@ -6,36 +6,54 @@ require 'config/environment'
 
 run_loop = Libuv::Reactor.default
 
-bespoked = Bespoked::EntryPoint.new(run_loop, {
-  "proxy-class" => ENV["BESPOKED_PROXY_CLASS"],
-  "watch-class" => ENV["BESPOKED_WATCH_CLASS"]}
-)
 
-run_loop.signal(:INT) do |_sigint|
-  bespoked.halt :run_loop_interupted
-end
+run_loop.run do |logger|
 
-run_loop.signal(:HUP) do |_sigint|
-  bespoked.halt :run_loop_hangup
-end
+  #LOGGING
+  stdout_pipe = run_loop.pipe
+  stdout_pipe.open($stdout.fileno)
 
-run_loop.signal(3) do |_sigint|
-  bespoked.halt :run_loop_quit
-end
+  logger.notifier do |level, type, message, _not_used|
+    if level && type && message
+      error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
+      stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
+    end
 
-run_loop.signal(15) do |_sigint|
-  bespoked.halt :run_loop_terminated
-end
-
-run_loop.prepare {
-  if bespoked.stopping
-    #TODO: this should maybe not be needed if we clean up everything ok?
-    run_loop.stop
+    stdout_pipe.write($/)
   end
-}.start
 
-bespoked.run_ingress_controller
+  #INIT
+  bespoked = Bespoked::EntryPoint.new(
+    run_loop,
+    ["ingresses", "services", "pods"],
+    {
+    "proxy-class" => ENV["BESPOKED_PROXY_CLASS"],
+    "watch-class" => ENV["BESPOKED_WATCH_CLASS"]
+    }
+  )
 
-run_loop.run
+  run_loop.signal(:INT) do |_sigint|
+    bespoked.halt :run_loop_interupted
+  end
 
-puts :exiting
+  run_loop.signal(:HUP) do |_sigint|
+    bespoked.halt :run_loop_hangup
+  end
+
+  run_loop.signal(3) do |_sigint|
+    bespoked.halt :run_loop_quit
+  end
+
+  run_loop.signal(15) do |_sigint|
+    bespoked.halt :run_loop_terminated
+  end
+
+  run_loop.prepare {
+    if bespoked.stopping
+      #TODO: this should maybe not be needed if we clean up everything ok?
+      run_loop.stop
+    end
+  }.start
+
+  bespoked.run_ingress_controller
+end

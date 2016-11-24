@@ -13,8 +13,10 @@ module Bespoked
   # autoload :HealthService, 'bespoked/health_service'
 
   # k8s resource "watchers"
-  # autoload :Watch, 'bespoked/watch'
-  # autoload :DebugWatch, 'bespoked/debug_watch'
+  autoload :Watch, 'bespoked/watch'
+  autoload :WatchFactory, 'bespoked/watch_factory'
+  autoload :DebugWatchFactory, 'bespoked/debug_watch_factory'
+
   # autoload :KubernetesWatch, 'bespoked/kubernetes_watch'
   # autoload :CommandWatch, 'bespoked/command_watch'
 

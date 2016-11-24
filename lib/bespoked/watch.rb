@@ -1,28 +1,28 @@
 #
 
-module Bespoked
-  class Watch
-    DEBUG_WATCH_TIMEOUT = 30000
+class Watch
+  attr_accessor :run_loop,
+                :json_parser,
+                :on_event_cb,
+                :waiting_for_authentication,
+                :waiting_for_authentication_promise
 
-    attr_accessor :run_loop
+  def initialize(run_loop_in)
+    self.run_loop = run_loop_in
+  end
 
-    def initialize(run_loop_in)
-      self.run_loop = run_loop_in
-    end
+  def on_event(&blk)
+    self.on_event_cb = blk
+  end
 
-    def create(resource_kind, defer, json_parser)
-      @run_loop.log(:info, :debug_watch_create, [resource_kind, defer, json_parser])
+  def restart
+    self.json_parser = Yajl::Parser.new
+    json_parser.on_parse_complete = @on_event_cb
 
-      defer.resolve(true)
+    #proc do |event|
+    #end
 
-      retry_defer = @run_loop.defer
-      watch_timeout = @run_loop.timer
-      watch_timeout.start(DEBUG_WATCH_TIMEOUT, 0)
-      watch_timeout.progress do
-        retry_defer.resolve(true)
-      end
-
-      return retry_defer.promise
-    end
+    self.waiting_for_authentication = @run_loop.defer
+    self.waiting_for_authentication_promise = @waiting_for_authentication.promise
   end
 end

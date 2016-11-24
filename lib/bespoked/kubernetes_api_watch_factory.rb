@@ -1,10 +1,11 @@
 #
 
 module Bespoked
-  class KubernetesWatch < Watch
+  class KubernetesApiWatchFactory < WatchFactory
     WATCH_TIMEOUT = 1000 * 60 * 5
 
-    def create(resource_kind, defer, json_parser)
+    def create(resource_kind, authentication_timeout = 1)
+=begin
       var_run_secrets_k8s_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
       var_run_secrets_k8s_crt_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
 
@@ -83,31 +84,8 @@ module Bespoked
       end
 
       return retry_defer.promise
+=end
     end
 
-    def path_for_watch(kind)
-      #TODO: add resource very query support e.g. ?resourceVersion=0
-      path_prefix = "/%s/watch/namespaces/default/%s"
-      path_for_watch = begin
-        case kind
-          when "pods"
-            path_prefix % ["api/v1", "pods"]
-
-          when "services"
-            path_prefix % ["api/v1", "services"]
-
-          when "ingresses"
-            path_prefix % ["apis/extensions/v1beta1", "ingresses"]
-
-          when "endpoints"
-            path_prefix % ["api/v1", "endpoints"]
-
-        else
-          raise "unknown api Kind to watch: #{kind}"
-        end
-      end
-
-      path_for_watch
-    end
   end
 end
