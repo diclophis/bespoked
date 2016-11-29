@@ -58,18 +58,24 @@ module Bespoked
       self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "DebugWatchFactory")
       self.watch_factory = @watch_factory_class.new(@run_loop)
 
-      self.watches = list_of_resources_to_watch.collect do |resource_to_watch|
+      self.watches = []
+
+      list_of_resources_to_watch.collect do |resource_to_watch|
         #@run_loop.log :info, :creating_watch, [resource_to_watch]
-        watch = @watch_factory.create(resource_to_watch)
-        watch.on_event do |event|
-          self.handle_event(event)
-        end
-        watch
+        new_watch = @watch_factory.create(resource_to_watch)
+        self.install_watch(new_watch)
       end
     end
 
+    def install_watch(new_watch)
+      new_watch.on_event do |event|
+        self.handle_event(event)
+      end
+      self.watches << new_watch
+    end
+
     def install_proxy
-      @run_loop.log :info, :install_proxy, []
+      #@run_loop.log :info, :install_proxy, []
 
       if ingress_descriptions = @descriptions["ingress"]
         @proxy.install(ingress_descriptions) if @proxy
@@ -80,7 +86,7 @@ module Bespoked
       old_checksum = @checksum
       @checksum = Digest::MD5.hexdigest(Marshal.dump(@descriptions))
       changed = @checksum != old_checksum
-      @run_loop.log :info, :checksum, [old_checksum, @checksum] if changed
+      #@run_loop.log :info, :checksum, [old_checksum, @checksum] if changed
       return changed
     end
 
@@ -101,7 +107,7 @@ module Bespoked
     end
 
     def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT, reconnect_wait = RECONNECT_WAIT)
-      @run_loop.log :info, :run_ingress_controller, []
+      #@run_loop.log :info, :run_ingress_controller, []
 
       self.failure_to_auth_timer = @run_loop.timer
       @failure_to_auth_timer.progress do
@@ -115,7 +121,12 @@ module Bespoked
       @reconnect_timer.progress do
         self.on_reconnect_cb
       end
-      @reconnect_timer.start(0, reconnect_wait)
+
+      if reconnect_wait
+        @reconnect_timer.start(0, reconnect_wait)
+      else
+        @reconnect_timer.start(0)
+      end
 
       yield if block_given?
     end
@@ -124,7 +135,8 @@ module Bespoked
       self.heartbeat = @run_loop.timer
 
       @heartbeat.progress do
-        @run_loop.log :info, :heartbeat_progress, []
+        #@run_loop.log :info, :heartbeat_progress, []
+
         self.install_proxy
       end
     end
@@ -139,13 +151,18 @@ module Bespoked
         watch.restart
       end
 
-      promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }
+      promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }.compact
 
-      @run_loop.finally(@watches).then do |watch_authentication_promises|
-        all_watches_authed_ok = watch_authentication_promises.all? { |http_ok, resolved| http_ok }
+      if promises.length > 0
+        @run_loop.finally(*promises).then do |watch_authentication_promises|
+          all_watches_authed_ok = watch_authentication_promises.all? { |http_ok, resolved| 
+            #each [result, wasResolved] value pair corresponding to a at the same index in the `promises` array.
+            http_ok
+          }
 
-        if all_watches_authed_ok
-          self.resolve_authentication!(proceed)
+          if all_watches_authed_ok
+            self.resolve_authentication!(proceed)
+          end
         end
       end
     end

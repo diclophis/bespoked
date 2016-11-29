@@ -6,11 +6,11 @@ class TestEntryPoint < MiniTest::Spec
     @bespoked = Bespoked::EntryPoint.new(@run_loop)
     @short_timeout = 10
     @never_timeout = 99999
-    @failsafe_timeout = install_failsafe_timeout(@run_loop)
+    install_failsafe_timeout(@run_loop)
   end
 
   after do
-    cancel_failsafe_timeout(@failsafe_timeout)
+    cancel_failsafe_timeout
   end
 
   describe "initialize" do
@@ -36,6 +36,7 @@ class TestEntryPoint < MiniTest::Spec
 
       install_proxy_stub = lambda {
         called_install_proxy = true
+        @run_loop.stop
       }
 
       @bespoked.stub :install_proxy, install_proxy_stub do
@@ -51,7 +52,32 @@ class TestEntryPoint < MiniTest::Spec
 
   describe "connect" do
     it "disconnects all watches and reconnects them" do
-      #assert !mock_watch.
+      defer_authentication = @run_loop.defer
+      promise_authentication = defer_authentication.promise
+
+      mock_watch = Minitest::Mock.new
+      mock_watch.expect :restart, true
+      mock_watch.expect :on_event, true
+      mock_watch.expect :waiting_for_authentication_promise, promise_authentication
+
+      did_fail_to_auth_timeout = false
+
+      on_failed_to_auth_cb_stub = lambda { |*args|
+        did_fail_to_auth_timeout = true
+        @run_loop.stop
+      }
+
+      @bespoked.stub :on_failed_to_auth_cb, on_failed_to_auth_cb_stub do
+        @run_loop.run do
+          @bespoked.install_watch(mock_watch)
+
+          @bespoked.run_ingress_controller(@short_timeout, nil)
+        end
+      end
+
+      mock_watch.verify
+
+      #puts [:resolved?, promise_authentication.resolved?].inspect
     end
   end
 
@@ -63,30 +89,38 @@ class TestEntryPoint < MiniTest::Spec
 
     it "halts after failure to authenticate within number of ms" do
       did_fail_to_auth_timeout = false
+      did_try_to_connect = false
 
       on_failed_to_auth_cb_stub = lambda { |*args|
         did_fail_to_auth_timeout = true
       }
 
+      will_try_to_connect = lambda { |*args|
+        did_try_to_connect = true
+      }
+
       @bespoked.stub :on_failed_to_auth_cb, on_failed_to_auth_cb_stub do
-        assert(!@bespoked.authenticated)
+        @bespoked.stub :connect, will_try_to_connect do
+          assert(!@bespoked.authenticated)
 
-        @run_loop.run do
-          @bespoked.run_ingress_controller(@short_timeout, @never_timeout)
+          @run_loop.run do
+            @bespoked.run_ingress_controller(@short_timeout, @never_timeout)
 
-          active_at_start_of_run = @bespoked.failure_to_auth_timer.active?
-          assert(active_at_start_of_run)
+            active_at_start_of_run = @bespoked.failure_to_auth_timer.active?
+            assert(active_at_start_of_run)
 
-          on_failed_to_auth_cb_check_idle = @run_loop.idle
-          on_failed_to_auth_cb_check_idle.progress do
-            if did_fail_to_auth_timeout
-              @run_loop.stop
+            on_failed_to_auth_cb_check_idle = @run_loop.idle
+            on_failed_to_auth_cb_check_idle.progress do
+              if did_fail_to_auth_timeout
+                @run_loop.stop
+              end
             end
+            on_failed_to_auth_cb_check_idle.start
           end
-          on_failed_to_auth_cb_check_idle.start
-        end
 
-        assert(!@bespoked.authenticated)
+          assert(did_try_to_connect, "should have tried to connect")
+          assert(!@bespoked.authenticated, "should not be authenticated")
+        end
       end
     end
 
@@ -103,6 +137,8 @@ class TestEntryPoint < MiniTest::Spec
         assert(!active_at_end_of_run)
 
         assert(@bespoked.authenticated)
+
+        @run_loop.stop
       end
     end
 

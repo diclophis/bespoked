@@ -11,30 +11,20 @@ require 'minitest/mock'
 class MiniTest::Spec
   # Add more helper methods to be used by all tests here...
 
-  def install_failsafe_timeout(run_loop, failsafe_after_ms = 1000)
-    failsafe_timeout = run_loop.timer
-    failsafe_timeout.progress do
-#      assert(false, "failsafe timeout reached")
+  def install_failsafe_timeout(run_loop, failsafe_after_ms = 5000)
+    @did_failsafe_timeout = false
 
+    @failsafe_timeout = run_loop.timer
+    @failsafe_timeout.progress do
+      @did_failsafe_timeout = true
       run_loop.stop
-
-=begin
-      run_loop.prepare {
-        #if bespoked.stopping
-        #  #TODO: this should maybe not be needed if we clean up everything ok?
-          run_loop.stop
-        #end
-      }.start
-      puts "#{run_loop.inspect}"
-=end
-
     end
-    failsafe_timeout.start(failsafe_after_ms)
-
-    failsafe_timeout
+    @failsafe_timeout.start(failsafe_after_ms)
   end
 
-  def cancel_failsafe_timeout(timeout)
-    timeout.stop
+  def cancel_failsafe_timeout
+    @failsafe_timeout.stop
+
+    assert(!@did_failsafe_timeout, "failsafe timeout encountered, please adjust test to safely exit reactor runloop before failing")
   end
 end
