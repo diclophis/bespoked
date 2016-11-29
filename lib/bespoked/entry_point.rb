@@ -4,6 +4,7 @@ module Bespoked
   class EntryPoint
     attr_accessor :descriptions,
                   :run_loop,
+                  :logger,
                   :checksum,
                   :watch_factory,
                   :watch_factory_class,
@@ -47,9 +48,11 @@ module Bespoked
       end
     end
 
-    def initialize(run_loop_in, list_of_resources_to_watch = [], options = {})
-      self.descriptions = {}
+    def initialize(run_loop_in, logger_in, list_of_resources_to_watch = [], options = {})
       self.run_loop = run_loop_in
+      self.logger = logger_in
+
+      self.descriptions = {}
       self.authenticated = false
       self.stopping = false
 
@@ -62,11 +65,16 @@ module Bespoked
       self.watches = []
 
       list_of_resources_to_watch.collect do |resource_to_watch|
-        #@run_loop.log :info, :creating_watch, [resource_to_watch]
+        self.record :info, :creating_watch, [resource_to_watch]
 
         new_watch = @watch_factory.create(resource_to_watch)
         self.install_watch(new_watch)
       end
+    end
+
+    def record(level = nil, name = nil, message = nil)
+      log_event = {:date => Time.now, :level => level, :name => name, :message => message}
+      @logger.notify(log_event)
     end
 
     def install_watch(new_watch)
@@ -78,7 +86,7 @@ module Bespoked
 
     def install_ingress_into_proxy_controller
       if ingress_descriptions = @descriptions["ingress"]
-        #@run_loop.log :info, :install_ingress, ingress_descriptions
+        self.record :info, :install_ingress, ingress_descriptions
 
         @proxy_controller.install(ingress_descriptions)
       end
@@ -88,8 +96,8 @@ module Bespoked
       old_checksum = @checksum
       @checksum = Digest::MD5.hexdigest(Marshal.dump(@descriptions))
       changed = @checksum != old_checksum
-      #@run_loop.log :info, :checksum, [old_checksum, @checksum] if changed
 
+      self.record :info, :checksum, [old_checksum, @checksum] if changed
       return changed
     end
 
@@ -102,19 +110,19 @@ module Bespoked
     end
 
     def on_failed_to_auth_cb
-      #@run_loop.log :info, :on_failed_to_auth_cb, []
+      self.record :info, :on_failed_to_auth_cb, []
 
       self.halt :no_ok_auth_failed
     end
 
     def on_reconnect_cb
-      #@run_loop.log :info, :on_reconnect_cb, []
+      self.record :info, :on_reconnect_cb, []
 
       self.connect(nil)
     end
 
     def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT, reconnect_wait = RECONNECT_WAIT)
-      #@run_loop.log :info, :run_ingress_controller, []
+      self.record :info, :run_ingress_controller, []
 
       self.failure_to_auth_timer = @run_loop.timer
       @failure_to_auth_timer.progress do
@@ -142,7 +150,7 @@ module Bespoked
       self.heartbeat = @run_loop.timer
 
       @heartbeat.progress do
-        #@run_loop.log :info, :heartbeat_progress, []
+        self.record :info, :heartbeat_progress, []
 
         self.install_ingress_into_proxy_controller
       end
@@ -161,10 +169,10 @@ module Bespoked
       promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }.compact
 
       if promises.length > 0
-        #@run_loop.log :info, :connect, promises
+        self.record :info, :connect, promises
 
         @run_loop.finally(*promises).then do |watch_authentication_promises|
-          #@run_loop.log :info, :connect_finally, watch_authentication_promises
+          self.record :info, :connect_finally, watch_authentication_promises
 
           all_watches_authed_ok = watch_authentication_promises.all? { |http_ok, resolved| 
             #each [result, wasResolved] value pair corresponding to a at the same index in the `promises` array.
@@ -195,7 +203,7 @@ module Bespoked
 
         unless (kind == "Endpoints" && name == "kubernetes")
           #NOTE: kubernetes api-server endpoints are not logged, dont name your branch kubernetes
-          #@run_loop.log :info, :event, [type, kind, name]
+          self.record :info, :event, [type, kind, name]
         end
 
         case kind
@@ -229,7 +237,7 @@ module Bespoked
             self.register_ingress(type, description)
 
         else
-          #@run_loop.log(:info, :unsupported_resource_list_type, kind)
+          self.record(:info, :unsupported_resource_list_type, kind)
         end
       end
 

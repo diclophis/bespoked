@@ -6,20 +6,26 @@ require 'config/environment'
 
 run_loop = Libuv::Reactor.new
 
-run_loop.run do |logger|
+run_loop.run do |exception_handler|
   #LOGGING
   stdout_pipe = run_loop.pipe
   stdout_pipe.open($stdout.fileno)
 
-  logger.notifier do |level, type, message|
-    error_trace = (level && level.respond_to?(:backtrace)) ? [level, level.backtrace] : message
-    stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
+  logger = run_loop.defer
+  logger.promise.progress do |log_entry|
+    stdout_pipe.write(Yajl::Encoder.encode(log_entry))
     stdout_pipe.write($/)
+  end
+
+  exception_handler.notifier do |error, message, trace|
+    #error_trace = (level && level.respond_to?(:backtrace)) ? [level, level.backtrace] : message
+    logger.notify({:date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace})
   end
 
   #INIT
   bespoked = Bespoked::EntryPoint.new(
     run_loop,
+    logger,
     ["ingresses", "services", "pods"],
     {
     "proxy-controller-factory-class" => ENV["BESPOKED_PROXY_CLASS"],

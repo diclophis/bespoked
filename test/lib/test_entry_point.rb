@@ -3,13 +3,25 @@ require_relative '../test_helper'
 class TestEntryPoint < MiniTest::Spec
   before do
     @run_loop = Libuv::Reactor.new
-    @bespoked = Bespoked::EntryPoint.new(@run_loop)
+
+    logger = @run_loop.defer
+    @logs = []
+
+    @run_loop.run(:UV_RUN_ONCE) do
+      logger.promise.progress do |log_entry|
+        @logs << log_entry
+      end
+    end
+
+    install_failsafe_timeout(@run_loop)
+
     @short_timeout = 10
     @never_timeout = 99999
-    install_failsafe_timeout(@run_loop)
+    @bespoked = Bespoked::EntryPoint.new(@run_loop, logger)
   end
 
   after do
+    #TODO: puts @logs.inspect
     cancel_failsafe_timeout
   end
 
