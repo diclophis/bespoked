@@ -24,4 +24,7 @@ module Bespoked
   autoload :RackProxyController, 'bespoked/rack_proxy_controller'
   autoload :HealthController, 'bespoked/health_controller'
   # autoload :NginxProxy, 'bespoked/nginx_proxy'
+
+  # generic rack support
+  autoload :RackHandler, 'bespoked/rack_handler'
 end

@@ -3,12 +3,12 @@
 module Bespoked
   class ProxyController
     attr_accessor :run_loop,
-                  :controller,
+                  :entry_point,
                   :vhosts
 
-    def initialize(run_loop_in, controller_in)
+    def initialize(run_loop_in, entry_point_in)
       self.run_loop = run_loop_in
-      self.controller = controller_in
+      self.entry_point = entry_point_in
       self.vhosts = {}
     end
 
@@ -42,7 +42,7 @@ module Bespoked
         if http = rule["http"]
           http["paths"].each do |http_path|
             service_name = http_path["backend"]["serviceName"]
-            if @controller && service = @controller.locate_service(service_name)
+            if @entry_point && service = @entry_point.locate_service(service_name)
               if spec = service["spec"]
                 upstreams = []
                 if ports = spec["ports"]

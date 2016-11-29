@@ -2,19 +2,20 @@
 
 module Bespoked
   class LibUVHttpProxyServer
-    attr_accessor :run_loop
+    attr_accessor :run_loop,
+                  :logger
 
-    def initialize(run_loop_in, options={})
+    def initialize(run_loop_in, logger_in, options={})
       self.run_loop = run_loop_in
+      self.logger = logger_in
 
-      options[:BindAddress] = DEFAULT_LIBUV_SOCKET_BIND
-
-      #@run_loop.log(:info, :rack_options, [options])
+      options[:BindAddress] ||= DEFAULT_LIBUV_SOCKET_BIND
+      options[:Port] ||= DEFAULT_LIBUV_HTTP_PROXY_PORT
 
       server = @run_loop.tcp
 
       server.catch do |reason|
-        #@run_loop.log(:error, :rack_http_proxy_handler, [reason, reason.class])
+        self.record(:error, :rack_http_proxy_handler, [reason, reason.class])
       end
 
       server.bind(options[:BindAddress], options[:Port].to_i) do |client|
@@ -22,6 +23,11 @@ module Bespoked
       end
 
       server.listen(16)
+    end
+
+    def record(level = nil, name = nil, message = nil)
+      log_event = {:date => Time.now, :level => level, :name => name, :message => message}
+      @logger.notify(log_event)
     end
 
     def handle_client(client)
