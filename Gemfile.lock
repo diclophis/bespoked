@@ -35,3 +35,6 @@ DEPENDENCIES
   minitest (= 5.7.0)
   rack
   yajl-ruby
+
+BUNDLED WITH
+   1.13.6

@@ -1,17 +1,13 @@
 #
 
 module Bespoked
-  class HealthService
+  class HealthController
     attr_accessor :run_loop,
                   :rack_handler
 
     def initialize(run_loop_in)
       self.run_loop = run_loop_in
-    end
-
-    def start
-      self.rack_handler = LibUVRackHandler.new(@run_loop, method(:handle_request), {:Port => 8889})
-      #@run_loop.log(:info, :health_start, nil)
+      self.rack_handler = LibUVRackServer.new(@run_loop, method(:handle_request), {:Port => 8889})
     end
 
     def handle_request(env)

@@ -1,13 +1,11 @@
 #
 
 module Bespoked
-  class LibUVHttpProxyHandler
-    attr_accessor :run_loop,
-                  :app
+  class LibUVHttpProxyServer
+    attr_accessor :run_loop
 
-    def initialize(run_loop_in, app_in, options={})
+    def initialize(run_loop_in, options={})
       self.run_loop = run_loop_in
-      self.app = app_in
 
       options[:BindAddress] = DEFAULT_LIBUV_SOCKET_BIND
 
@@ -35,7 +33,15 @@ module Bespoked
 
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
 
-        if url = app.call(env)
+        in_url = URI.parse("http://" + env["HTTP_HOST"])
+        out_url = nil
+
+        if mapped_host_port = @vhosts[in_url.host]
+          out_url = URI.parse("http://" + mapped_host_port)
+        end
+
+        #TODO
+        if url = out_url
           host = url.host
           port = url.port
 

@@ -1,7 +1,7 @@
 #
 
 module Bespoked
-  class LibUVRackHandler
+  class LibUVRackServer
     attr_accessor :run_loop,
                   :app
 
@@ -23,7 +23,10 @@ module Bespoked
         handle_client(client)
       end
 
-      server.listen(16)
+      server.listen(1024)
+
+      server.enable_simultaneous_accepts
+      server.enable_nodelay
     end
 
     def handle_client(client)
@@ -52,31 +55,42 @@ module Bespoked
         env = {}
 
         env.update(
-          'RACK_VERSION'      => ::Rack::VERSION,
-          'RACK_INPUT'        => nil,
-          'RACK_ERRORS'       => nil,
-          'RACK_MULTITHREAD'  => true,
-          'RACK_MULTIPROCESS' => false,
-          'RACK_RUNONCE'      => false,
+          'RACK_VERSION'      => ::Rack::VERSION.to_s,
+          #'RACK_INPUT'        => StringIO.new,
+          'RACK_ERRORS'       => String.new,
+          'RACK_MULTITHREAD'  => "false",
+          'RACK_MULTIPROCESS' => "false",
+          'RACK_RUNONCE'      => "false",
           'RACK_URL_SCHEME'   => "http",
-          'RACK_IS_HIJACK'    => false,
-          'RACK_HIJACK'       => lambda { raise NotImplementedError, "only partial hijack is supported."},
-          'RACK_HIJACK_IO'    => nil
+          'rack.url_scheme'   => "http",
+          'RACK_IS_HIJACK'    => "false",
+          'RACK_HIJACK'       => "", #lambda { raise NotImplementedError, "only partial hijack is supported."},
+          'RACK_HIJACK_IO'    => "",
+          'HTTP_VERSION'      => "HTTP/#{http_parser.http_version.join(".")}",
+          "rack.errors"       => $stderr,
+          "rack.version"      => ::Rack::VERSION.to_s.split("."),
+          "rack.multithread"  => "false",
+          "rack.multiprocess" => "false",
+          "rack.run_once"     => "true",
+          "rack.input"        => StringIO.new.set_encoding('ASCII-8BIT'),
+          "RACK_INPUT"        => ""
         )
 
         env['HTTP_VERSION'] ||= env['SERVER_PROTOCOL']
         env['QUERY_STRING'] ||= ""
+        env['REQUEST_METHOD'] = http_parser.http_method
         env['PATH_INFO'] = http_parser.request_url
         env['REQUEST_PATH'] = http_parser.request_url
+        env["SERVER_NAME"] = (http_parser.headers["host"] || http_parser.headers["Host"])
+        env["SERVER_PORT"] = "1234"
 
         status, headers, body = @app.call(env)
 
-        length = 0
-        body.each { |b|
-          length += b.length
-        }
-
-        headers["Content-Length"] = length.to_s
+        #length = 0
+        #body.each { |b|
+        #  length += b.length
+        #}
+        #headers["Content-Length"] = length.to_s
 
         send_headers client, status, headers
         send_body client, body

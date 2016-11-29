@@ -2,15 +2,14 @@
 
 module Bespoked
   # bind... are "servers"
-  # autoload :LibUVRackHandler, 'bespoked/libuv_rack_handler'
-  # autoload :LibUVHttpProxyHandler, 'bespoked/libuv_http_proxy_handler'
+  autoload :LibUVRackServer, 'bespoked/libuv_rack_server'
+  autoload :LibUVHttpProxyServer, 'bespoked/libuv_http_proxy_server'
 
   # "entrypoint"
   autoload :EntryPoint, 'bespoked/entry_point'
 
   # "apps"
   # autoload :Dashboard, 'bespoked/dashboard'
-  # autoload :HealthService, 'bespoked/health_service'
 
   # k8s resource "watchers"
   autoload :Watch, 'bespoked/watch'
@@ -20,8 +19,9 @@ module Bespoked
   # autoload :KubernetesWatch, 'bespoked/kubernetes_watch'
   # autoload :CommandWatch, 'bespoked/command_watch'
 
-  # "proxy controllers"
+  # "proxy/other/controllers"
   autoload :ProxyController, 'bespoked/proxy_controller'
   autoload :RackProxyController, 'bespoked/rack_proxy_controller'
+  autoload :HealthController, 'bespoked/health_controller'
   # autoload :NginxProxy, 'bespoked/nginx_proxy'
 end

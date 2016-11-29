@@ -12,7 +12,7 @@ module Bespoked
                   :proxy_controller_factory_class,
                   :watches,
                   :dashboard,
-                  :health,
+                  :health_controller,
                   :failure_to_auth_timer,
                   :reconnect_timer,
                   :authenticated,
@@ -55,6 +55,8 @@ module Bespoked
       self.descriptions = {}
       self.authenticated = false
       self.stopping = false
+
+      self.health_controller = Bespoked::HealthController.new(@run_loop)
 
       self.proxy_controller_factory_class = Bespoked.const_get(options["proxy-controller-factory-class"] || "RackProxyController")
       self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self)
