@@ -20,8 +20,8 @@ module Bespoked
   # autoload :KubernetesWatch, 'bespoked/kubernetes_watch'
   # autoload :CommandWatch, 'bespoked/command_watch'
 
-  # "controllers"
-  # autoload :Proxy, 'bespoked/proxy'
+  # "proxy controllers"
+  autoload :ProxyController, 'bespoked/proxy_controller'
+  autoload :RackProxyController, 'bespoked/rack_proxy_controller'
   # autoload :NginxProxy, 'bespoked/nginx_proxy'
-  # autoload :RackProxy, 'bespoked/rack_proxy'
 end

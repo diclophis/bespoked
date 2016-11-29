@@ -32,20 +32,20 @@ class TestEntryPoint < MiniTest::Spec
 
   describe "install_heartbeat" do
     it "creates a timer that when triggered installs proxy mappings" do
-      called_install_proxy = false
+      called_install_ingress_into_proxy_controller = false
 
-      install_proxy_stub = lambda {
-        called_install_proxy = true
+      install_ingress_into_proxy_controller_stub = lambda {
+        called_install_ingress_into_proxy_controller = true
         @run_loop.stop
       }
 
-      @bespoked.stub :install_proxy, install_proxy_stub do
+      @bespoked.stub :install_ingress_into_proxy_controller, install_ingress_into_proxy_controller_stub do
         heartbeat = @bespoked.install_heartbeat
         heartbeat.start(0, 0)
 
         @run_loop.run
 
-        called_install_proxy.must_equal true
+        called_install_ingress_into_proxy_controller.must_equal true
       end
     end
   end

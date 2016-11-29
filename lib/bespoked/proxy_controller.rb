@@ -1,25 +1,28 @@
 #
 
 module Bespoked
-  class Proxy
+  class ProxyController
     attr_accessor :run_loop,
-                  :controller
+                  :controller,
+                  :vhosts
 
     def initialize(run_loop_in, controller_in)
       self.run_loop = run_loop_in
       self.controller = controller_in
+      self.vhosts = {}
     end
 
     def install(ingress_descriptions)
-      @run_loop.log(:info, :debug_proxy_install, ingress_descriptions.keys)
-    end
+      #@run_loop.log(:info, :proxy_controller_install, ingress_descriptions.keys)
 
-    def start
-      @run_loop.log(:info, :debug_proxy_start, nil)
-    end
-
-    def stop
-      @run_loop.log(:info, :debug_proxy_stop, nil)
+      ingress_descriptions.values.each do |ingress_description|
+        vhosts_for_ingress = self.extract_vhosts(ingress_description)
+        #@run_loop.log(:info, :vhosts_extracted, vhosts_for_ingress)
+        vhosts_for_ingress.each do |host, service_name, upstreams|
+          #@run_loop.log(:info, :rack_proxy_vhost, [host, service_name, upstreams])
+          @vhosts[host] = upstreams[0]
+        end
+      end
     end
 
     def extract_name(description)

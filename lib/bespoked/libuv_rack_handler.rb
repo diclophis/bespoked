@@ -11,13 +11,13 @@ module Bespoked
 
       options[:BindAddress] = DEFAULT_LIBUV_SOCKET_BIND
 
-      @run_loop.log(:info, :rack_options, [options])
+      #@run_loop.log(:info, :rack_options, [options])
 
       server = @run_loop.tcp
 
-      server.catch do |reason|
-        @run_loop.log(:error, :rack_handler_server_error, [reason, reason.class])
-      end
+      #server.catch do |reason|
+      #  #@run_loop.log(:error, :rack_handler_server_error, [reason, reason.class])
+      #end
 
       server.bind(options[:BindAddress], options[:Port].to_i) do |client|
         handle_client(client)
@@ -31,23 +31,23 @@ module Bespoked
 
       # HTTP headers available
       http_parser.on_headers_complete = proc do
-        @run_loop.log(:debug, :http_rack_headers, http_parser.headers)
+        #@run_loop.log(:debug, :http_rack_headers, http_parser.headers)
 
         url = URI.parse("http://" + (http_parser.headers["host"] || http_parser.headers["Host"]))
         host = url.host
         port = url.port
 
-        @run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
+        #@run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
       end
 
       # One chunk of the body
       http_parser.on_body = proc do |chunk|
-        @run_loop.log(:info, :rack_http_on_body, [http_parser.headers])
+        #@run_loop.log(:info, :rack_http_on_body, [http_parser.headers])
       end
 
       # Headers and body is all parsed
       http_parser.on_message_complete = proc do |env|
-        @run_loop.log(:info, :rack_http_on_message_completed, nil)
+        #@run_loop.log(:info, :rack_http_on_message_completed, nil)
 
         env = {}
 
@@ -82,7 +82,7 @@ module Bespoked
         send_body client, body
         client.close
 
-        @run_loop.log(:debug, :rack_http_sent_response, [status, headers, body])
+        #@run_loop.log(:debug, :rack_http_sent_response, [status, headers, body])
       end
 
       ##################

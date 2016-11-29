@@ -11,12 +11,12 @@ module Bespoked
 
       options[:BindAddress] = DEFAULT_LIBUV_SOCKET_BIND
 
-      @run_loop.log(:info, :rack_options, [options])
+      #@run_loop.log(:info, :rack_options, [options])
 
       server = @run_loop.tcp
 
       server.catch do |reason|
-        @run_loop.log(:error, :rack_http_proxy_handler, [reason, reason.class])
+        #@run_loop.log(:error, :rack_http_proxy_handler, [reason, reason.class])
       end
 
       server.bind(options[:BindAddress], options[:Port].to_i) do |client|
@@ -39,22 +39,24 @@ module Bespoked
           host = url.host
           port = url.port
 
-          run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
+          #run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
 
           on_dns_bad = proc { |err|
-            run_loop.log(:warn, :dns_error, [err, err.class])
+            #run_loop.log(:warn, :dns_error, [err, err.class])
+
             client.close
           }
 
           on_dns_ok = proc { |addrinfo|
             ip_address = addrinfo[0][0]
 
-            run_loop.log(:info, :ip_lookup, [host, ip_address, port.to_i, client.sockname, client.peername])
+            #run_loop.log(:info, :ip_lookup, [host, ip_address, port.to_i, client.sockname, client.peername])
 
             new_client = run_loop.tcp
 
             new_client.catch do |err|
-              run_loop.log(:warn, :rack_proxy_client_error, [err, err.class])
+              #run_loop.log(:warn, :rack_proxy_client_error, [err, err.class])
+
               client.close
             end
 
@@ -83,7 +85,7 @@ module Bespoked
                 }
               }
 
-              run_loop.log(:debug, :wrote_upstream_request, [headers_for_upstream_request])
+              #run_loop.log(:debug, :wrote_upstream_request, [headers_for_upstream_request])
 
               #http_parser = nil
               up_client.write("\r\n")

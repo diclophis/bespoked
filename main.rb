@@ -4,21 +4,16 @@ $:.unshift File.dirname(__FILE__)
 
 require 'config/environment'
 
-run_loop = Libuv::Reactor.default
-
+run_loop = Libuv::Reactor.new
 
 run_loop.run do |logger|
-
   #LOGGING
   stdout_pipe = run_loop.pipe
   stdout_pipe.open($stdout.fileno)
 
-  logger.notifier do |level, type, message, _not_used|
-    if level && type && message
-      error_trace = (message && message.respond_to?(:backtrace)) ? [message, message.backtrace] : message
-      stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
-    end
-
+  logger.notifier do |level, type, message|
+    error_trace = (level && level.respond_to?(:backtrace)) ? [level, level.backtrace] : message
+    stdout_pipe.write(Yajl::Encoder.encode({:date => Time.now, :level => level, :type => type, :message => error_trace}))
     stdout_pipe.write($/)
   end
 
@@ -27,8 +22,8 @@ run_loop.run do |logger|
     run_loop,
     ["ingresses", "services", "pods"],
     {
-    "proxy-class" => ENV["BESPOKED_PROXY_CLASS"],
-    "watch-class" => ENV["BESPOKED_WATCH_CLASS"]
+    "proxy-controller-factory-class" => ENV["BESPOKED_PROXY_CLASS"],
+    "watch-factory-class" => ENV["BESPOKED_WATCH_CLASS"]
     }
   )
 

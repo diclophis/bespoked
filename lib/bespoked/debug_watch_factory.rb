@@ -86,15 +86,18 @@ module Bespoked
       fake_authentication_timeout.progress do
         retries += 1
         http_ok = (retries > 3)
-        new_watch.waiting_for_authentication.resolve(http_ok)
 
         if http_ok
+          new_watch.waiting_for_authentication.resolve(http_ok)
+
+          fake_authentication_timeout.stop
+
           DEBUG_JSON_STREAM.each do |obj|
             new_watch.json_parser << Yajl::Encoder.encode(obj)
           end
         end
       end
-      fake_authentication_timeout.start(authentication_timeout, authentication_timeout)
+      fake_authentication_timeout.start(0, authentication_timeout)
 
       return new_watch
     end

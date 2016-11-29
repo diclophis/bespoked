@@ -24,7 +24,7 @@ module Bespoked
         begin
           json_parser << chunk
         rescue Yajl::ParseError => bad_json
-          @run_loop.log(:error, :bad_json, [bad_json, chunk])
+          #@run_loop.log(:error, :bad_json, [bad_json, chunk])
         end
       end
 

@@ -37,7 +37,7 @@ module Bespoked
           begin
             Process.kill("HUP", @nginx_process_waiter.pid)
           rescue Errno::ESRCH => no_child
-            @run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
+            #@run_loop.log(:warn, :no_child, @nginx_process_waiter.pid)
           end
 
           if @version > 2
@@ -70,12 +70,12 @@ module Bespoked
           self.nginx_stderr_pipe.open(@nginx_stderr.fileno)
 
           @nginx_stderr_pipe.progress do |data|
-            @run_loop.log :info, :nginx_stderr, data
+            #@run_loop.log :info, :nginx_stderr, data
           end
           @nginx_stderr_pipe.start_read
 
           @nginx_stdout_pipe.progress do |data|
-            @run_loop.log :info, :nginx_stdout, data
+            #@run_loop.log :info, :nginx_stdout, data
           end
           @nginx_stdout_pipe.start_read
         end
@@ -143,9 +143,9 @@ module Bespoked
               f.write(site_config)
             end
 
-            @run_loop.log(:info, :installing_ingress, [host, service_name, site_upstreams])
+            #@run_loop.log(:info, :installing_ingress, [host, service_name, site_upstreams])
           else
-            @run_loop.log(:info, :missing_map_dirs, [host, service_name, site_upstreams])
+            #@run_loop.log(:info, :missing_map_dirs, [host, service_name, site_upstreams])
           end
         end
       end
@@ -163,13 +163,13 @@ module Bespoked
       }
 
       lstat_failed = proc { |reason|
-        @run_loop.log :info, :ignore_current_lstat_failed, reason
+        #@run_loop.log :info, :ignore_current_lstat_failed, reason
         proceed.call
       }
 
       proceed_with_current_to_last_rename = proc {
         rename_current_failed = proc { |reason|
-          @run_loop.log :error, :rename_current_to_last_failed, reason
+          #@run_loop.log :error, :rename_current_to_last_failed, reason
         }
 
         @filesystem.rename(@var_lib_k8s, File.join(@run_dir, "last-version-before-" + @version.to_s)).then(nil, rename_current_failed) do

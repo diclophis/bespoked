@@ -11,7 +11,7 @@ module Bespoked
 
     def start
       self.rack_handler = LibUVRackHandler.new(@run_loop, method(:handle_request), {:Port => 8890})
-      @run_loop.log(:info, :dashboard_start, nil)
+      #@run_loop.log(:info, :dashboard_start, nil)
     end
 
     def handle_request(env)

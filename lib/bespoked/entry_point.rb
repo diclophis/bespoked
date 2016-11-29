@@ -2,16 +2,16 @@
 
 module Bespoked
   class EntryPoint
-    attr_accessor :proxy,
-                  :descriptions,
+    attr_accessor :descriptions,
                   :run_loop,
                   :checksum,
                   :watch_factory,
                   :watch_factory_class,
+                  :proxy_controller,
+                  :proxy_controller_factory_class,
                   :watches,
                   :dashboard,
                   :health,
-                  :proxy_class,
                   :failure_to_auth_timer,
                   :reconnect_timer,
                   :authenticated,
@@ -53,7 +53,8 @@ module Bespoked
       self.authenticated = false
       self.stopping = false
 
-      #self.proxy_class = Bespoked.const_get(options["proxy-class"] || "RackProxy")
+      self.proxy_controller_factory_class = Bespoked.const_get(options["proxy-controller-factory-class"] || "RackProxyController")
+      self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self)
 
       self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "DebugWatchFactory")
       self.watch_factory = @watch_factory_class.new(@run_loop)
@@ -62,6 +63,7 @@ module Bespoked
 
       list_of_resources_to_watch.collect do |resource_to_watch|
         #@run_loop.log :info, :creating_watch, [resource_to_watch]
+
         new_watch = @watch_factory.create(resource_to_watch)
         self.install_watch(new_watch)
       end
@@ -74,11 +76,11 @@ module Bespoked
       self.watches << new_watch
     end
 
-    def install_proxy
-      #@run_loop.log :info, :install_proxy, []
-
+    def install_ingress_into_proxy_controller
       if ingress_descriptions = @descriptions["ingress"]
-        @proxy.install(ingress_descriptions) if @proxy
+        #@run_loop.log :info, :install_ingress, ingress_descriptions
+
+        @proxy_controller.install(ingress_descriptions)
       end
     end
 
@@ -87,6 +89,7 @@ module Bespoked
       @checksum = Digest::MD5.hexdigest(Marshal.dump(@descriptions))
       changed = @checksum != old_checksum
       #@run_loop.log :info, :checksum, [old_checksum, @checksum] if changed
+
       return changed
     end
 
@@ -99,10 +102,14 @@ module Bespoked
     end
 
     def on_failed_to_auth_cb
+      #@run_loop.log :info, :on_failed_to_auth_cb, []
+
       self.halt :no_ok_auth_failed
     end
 
     def on_reconnect_cb
+      #@run_loop.log :info, :on_reconnect_cb, []
+
       self.connect(nil)
     end
 
@@ -137,7 +144,7 @@ module Bespoked
       @heartbeat.progress do
         #@run_loop.log :info, :heartbeat_progress, []
 
-        self.install_proxy
+        self.install_ingress_into_proxy_controller
       end
     end
 
@@ -154,7 +161,11 @@ module Bespoked
       promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }.compact
 
       if promises.length > 0
+        #@run_loop.log :info, :connect, promises
+
         @run_loop.finally(*promises).then do |watch_authentication_promises|
+          #@run_loop.log :info, :connect_finally, watch_authentication_promises
+
           all_watches_authed_ok = watch_authentication_promises.all? { |http_ok, resolved| 
             #each [result, wasResolved] value pair corresponding to a at the same index in the `promises` array.
             http_ok
@@ -218,7 +229,7 @@ module Bespoked
             self.register_ingress(type, description)
 
         else
-          @run_loop.log(:info, :unsupported_resource_list_type, kind)
+          #@run_loop.log(:info, :unsupported_resource_list_type, kind)
         end
       end
 
