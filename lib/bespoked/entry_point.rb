@@ -109,6 +109,8 @@ module Bespoked
 
     def halt(message)
       @stopping = true
+      @proxy_controller.shutdown
+      @health_controller.shutdown
     end
 
     def on_failed_to_auth_cb

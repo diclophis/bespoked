@@ -12,6 +12,10 @@ module Bespoked
       self.vhosts = {}
     end
 
+    def shutdown
+      raise "must override"
+    end
+
     def install(ingress_descriptions)
       #@run_loop.log(:info, :proxy_controller_install, ingress_descriptions.keys)
 
@@ -23,6 +27,8 @@ module Bespoked
           @vhosts[host] = upstreams[0]
         end
       end
+
+      @entry_point.record :info, :vhosts, @vhosts
     end
 
     def extract_name(description)
@@ -58,6 +64,8 @@ module Bespoked
           end
         end
       end
+
+      #@entry_point.record :info, :vhosts, vhosts
 
       vhosts
     end

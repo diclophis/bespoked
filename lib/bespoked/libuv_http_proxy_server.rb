@@ -3,26 +3,37 @@
 module Bespoked
   class LibUVHttpProxyServer
     attr_accessor :run_loop,
-                  :logger
+                  :logger,
+                  :proxy_controller,
+                  :server
 
-    def initialize(run_loop_in, logger_in, options={})
+    def initialize(run_loop_in, logger_in, proxy_controller_in, options={})
       self.run_loop = run_loop_in
       self.logger = logger_in
+      self.proxy_controller = proxy_controller_in
 
       options[:BindAddress] ||= DEFAULT_LIBUV_SOCKET_BIND
       options[:Port] ||= DEFAULT_LIBUV_HTTP_PROXY_PORT
 
-      server = @run_loop.tcp
+      self.server = @run_loop.tcp
 
-      server.catch do |reason|
+      @server.catch do |reason|
         self.record(:error, :rack_http_proxy_handler, [reason, reason.class])
       end
 
-      server.bind(options[:BindAddress], options[:Port].to_i) do |client|
+      puts [:bind_in, options[:Port]].inspect
+
+      @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
+        puts :wtf
         handle_client(client)
       end
 
-      server.listen(16)
+      @server.listen(1024)
+    end
+
+    def shutdown
+      puts :close_proxy
+      @server.shutdown
     end
 
     def record(level = nil, name = nil, message = nil)
@@ -31,10 +42,13 @@ module Bespoked
     end
 
     def handle_client(client)
+      puts :got_client
+
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
 
       http_parser.on_headers_complete = proc do
+      puts :headers_complete
         reading_state = :request_to_upstream
 
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
@@ -42,7 +56,10 @@ module Bespoked
         in_url = URI.parse("http://" + env["HTTP_HOST"])
         out_url = nil
 
-        if mapped_host_port = @vhosts[in_url.host]
+        puts in_url
+        puts @proxy_controller.vhosts.inspect
+
+        if mapped_host_port = @proxy_controller.vhosts[in_url.host]
           out_url = URI.parse("http://" + mapped_host_port)
         end
 
@@ -76,7 +93,7 @@ module Bespoked
               up_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n")
 
               proxy_override_headers = {
-                "Connection" => "close",
+                #"Connection" => "close",
                 "X-Forwarded-For" => client.peername[0] || "", # NOTE: makes the actual IP available
                 "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
                 "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning
@@ -130,6 +147,7 @@ module Bespoked
 
           do_dns_lookup.call
         else
+          puts :no_batch
           client.close
         end
 
@@ -149,6 +167,7 @@ module Bespoked
       client.start_read
     end
 
+=begin
     def send_headers(client, status, headers)
       client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n"
       headers.each { |k, vs|
@@ -166,6 +185,6 @@ module Bespoked
         end
       }
     end
-
+=end
   end
 end

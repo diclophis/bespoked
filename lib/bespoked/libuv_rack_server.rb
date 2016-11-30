@@ -3,7 +3,8 @@
 module Bespoked
   class LibUVRackServer
     attr_accessor :run_loop,
-                  :app
+                  :app,
+                  :server
 
     def initialize(run_loop_in, app_in, options={})
       self.run_loop = run_loop_in
@@ -13,20 +14,29 @@ module Bespoked
 
       #@run_loop.log(:info, :rack_options, [options])
 
-      server = @run_loop.tcp
+      self.server = @run_loop.tcp
 
-      #server.catch do |reason|
-      #  #@run_loop.log(:error, :rack_handler_server_error, [reason, reason.class])
-      #end
+      @server.catch do |reason, wtf|
+        puts reason.inspect
+        puts reason.backtrace.inspect
+        #@run_loop.log(:error, :rack_handler_server_error, [reason, reason.class])
+      end
 
-      server.bind(options[:BindAddress], options[:Port].to_i) do |client|
+      puts [:bind_up, options[:Port]].inspect
+      @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
+        puts :got_client_in_upstream
         handle_client(client)
       end
 
-      server.listen(1024)
+      @server.listen(1024)
 
-      server.enable_simultaneous_accepts
-      server.enable_nodelay
+      #server.enable_simultaneous_accepts
+      #server.enable_nodelay
+    end
+
+    def shutdown
+      puts :upstream_close
+      @server.shutdown
     end
 
     def handle_client(client)
@@ -86,11 +96,11 @@ module Bespoked
 
         status, headers, body = @app.call(env)
 
-        #length = 0
-        #body.each { |b|
-        #  length += b.length
-        #}
-        #headers["Content-Length"] = length.to_s
+        length = 0
+        body.each { |b|
+          length += b.length
+        }
+        headers["Content-Length"] = length.to_s
 
         send_headers client, status, headers
         send_body client, body
