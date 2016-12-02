@@ -89,8 +89,6 @@ class TestEntryPoint < MiniTest::Spec
       end
 
       mock_watch.verify
-
-      #puts [:resolved?, promise_authentication.resolved?].inspect
     end
   end
 
@@ -163,11 +161,8 @@ class TestEntryPoint < MiniTest::Spec
       }
 
       @bespoked.stub :on_reconnect_cb, on_reconnect_cb_stub do
-
         @run_loop.run do
-
           @bespoked.run_ingress_controller(@never_timeout, @short_timeout)
-
           on_reconnect_cb_check_idle = @run_loop.idle
           on_reconnect_cb_check_idle.progress do
             if times_reconnected > 5
@@ -175,7 +170,6 @@ class TestEntryPoint < MiniTest::Spec
             end
           end
           on_reconnect_cb_check_idle.start
-
         end
       end
 

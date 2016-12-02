@@ -17,31 +17,16 @@ module Bespoked
 
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
-      #server.enable_simultaneous_accepts
-      #server.enable_nodelay
-
-      #dbp = FFI::MemoryPointer.new(:int)
-      #rc = ::Libuv::Ext.fileno(@server, dbp)
-      #@server.check_result!(rc)
-      #fd_val = dbp.get_int(0)
-      #socket = Socket.for_fd(fd_val)
-      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEPORT, true)
-      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true)
-      #socket = nil
-      #dbp.free
-
       @server.catch do |reason|
         puts reason.inspect
       end
 
-      puts options[:Port].to_i
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
         handle_client(client)
       end
     end
 
     def start
-      puts :aaa
       @server.listen(1024)
     end
 
@@ -63,8 +48,6 @@ module Bespoked
       reading_state = :request_to_proxy
 
       http_parser.on_headers_complete = proc do
-        puts :headers_complete
-
         reading_state = :request_to_upstream
 
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
@@ -72,8 +55,8 @@ module Bespoked
         in_url = URI.parse("http://" + env["HTTP_HOST"])
         out_url = nil
 
-        puts in_url
-        puts @proxy_controller.vhosts.inspect
+        #puts in_url
+        #puts @proxy_controller.vhosts.inspect
 
         if mapped_host_port = @proxy_controller.vhosts[in_url.host]
           out_url = URI.parse("http://" + mapped_host_port)
@@ -81,8 +64,6 @@ module Bespoked
 
         #TODO
         if url = out_url
-          puts :found_match
-
           host = url.host
           port = url.port
 
@@ -96,8 +77,6 @@ module Bespoked
           }
 
           on_dns_ok = proc { |addrinfo|
-            puts :dns_ok
-
             ip_address = addrinfo[0][0]
 
             #run_loop.log(:info, :ip_lookup, [host, ip_address, port.to_i, client.sockname, client.peername])
@@ -112,8 +91,6 @@ module Bespoked
             end
 
             new_client.connect(ip_address, port.to_i) do
-              puts :got_up
-
               new_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n", wait: true)
 
               proxy_override_headers = {
@@ -147,8 +124,6 @@ module Bespoked
               end
               http_parser.reset!
 
-              puts :reset_http_parser
-
               new_client.progress do |chunk|
                 if client && chunk && chunk.length > 0
                   client.write(chunk)
@@ -167,14 +142,9 @@ module Bespoked
             new_client.start_read
           }
 
-          #do_dns_lookup = proc {
-          puts host
-            run_loop.lookup(host, {:wait => false}).then(on_dns_ok, on_dns_bad)
-          #}
-
-          #do_dns_lookup.call
+          run_loop.lookup(host, {:wait => false}).then(on_dns_ok, on_dns_bad)
         else
-          puts :no_batch
+          puts :no_match
           client.shutdown
         end
 
@@ -193,25 +163,5 @@ module Bespoked
 
       client.start_read
     end
-
-=begin
-    def send_headers(client, status, headers)
-      client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n"
-      headers.each { |k, vs|
-        vs.split("\n").each { |v|
-          client.write "#{k}: #{v}\r\n"
-        }
-      }
-      client.write "\r\n"
-    end
-
-    def send_body(client, body)
-      body.each { |part|
-        if part && part.length > 0
-          client.write part
-        end
-      }
-    end
-=end
   end
 end

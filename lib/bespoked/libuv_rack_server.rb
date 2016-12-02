@@ -14,20 +14,6 @@ module Bespoked
 
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
-      #server.enable_simultaneous_accepts
-      #server.enable_nodelay
-
-      #dbp = FFI::MemoryPointer.new(:int)
-      #rc = ::Libuv::Ext.fileno(@server, dbp)
-      #@server.check_result!(rc)
-      #
-      #fd_val = dbp.get_int(0)
-      #socket = Socket.for_fd(fd_val)
-      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEPORT, true)
-      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true)
-      #socket = nil
-      #dbp.free
-
       @server.catch do |reason|
         puts reason.inspect
       end
@@ -38,7 +24,6 @@ module Bespoked
     end
 
     def start
-      puts :bbb
       @server.listen(1024)
     end
 
