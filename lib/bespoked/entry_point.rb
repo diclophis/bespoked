@@ -128,6 +128,9 @@ module Bespoked
     def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT, reconnect_wait = RECONNECT_WAIT)
       self.record :info, :run_ingress_controller, []
 
+      @proxy_controller.start
+      @health_controller.start
+
       self.failure_to_auth_timer = @run_loop.timer
       @failure_to_auth_timer.progress do
         self.on_failed_to_auth_cb

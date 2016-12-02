@@ -14,6 +14,10 @@ module Bespoked
       @rack_server.shutdown
     end
 
+    def start
+      @rack_server.start
+    end
+
     def handle_request(env)
       ['200', {'Content-Type' => 'text/html'}, ["OK.\r\n"]]
     end

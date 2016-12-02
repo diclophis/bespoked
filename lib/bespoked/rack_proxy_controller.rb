@@ -13,5 +13,9 @@ module Bespoked
     def shutdown
       @http_proxy_server.shutdown
     end
+
+    def start
+      @http_proxy_server.start
+    end
   end
 end
