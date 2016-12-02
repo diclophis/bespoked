@@ -12,31 +12,39 @@ module Bespoked
 
       options[:BindAddress] = DEFAULT_LIBUV_SOCKET_BIND
 
-      #@run_loop.log(:info, :rack_options, [options])
-
-      self.server = @run_loop.tcp
-
-      @server.catch do |reason, wtf|
-        puts reason.inspect
-        puts reason.backtrace.inspect
-        #@run_loop.log(:error, :rack_handler_server_error, [reason, reason.class])
-      end
-
-      puts [:bind_up, options[:Port]].inspect
-      @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
-        puts :got_client_in_upstream
-        handle_client(client)
-      end
-
-      @server.listen(1024)
+      self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       #server.enable_simultaneous_accepts
       #server.enable_nodelay
+
+      #dbp = FFI::MemoryPointer.new(:int)
+      #rc = ::Libuv::Ext.fileno(@server, dbp)
+      #@server.check_result!(rc)
+      #
+      #fd_val = dbp.get_int(0)
+      #socket = Socket.for_fd(fd_val)
+      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEPORT, true)
+      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true)
+      #socket = nil
+      #dbp.free
+
+      @server.catch do |reason|
+        puts reason.inspect
+      end
+
+      @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
+        handle_client(client)
+      end
+    end
+
+    def start
+      puts :bbb
+      @server.listen(1024)
     end
 
     def shutdown
-      puts :upstream_close
       @server.shutdown
+      @server.close
     end
 
     def handle_client(client)

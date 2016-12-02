@@ -24,7 +24,6 @@ class TestEntryPoint < MiniTest::Spec
     #TODO: puts @logs.inspect
     @bespoked.halt :stopping_tests
     cancel_failsafe_timeout
-    sleep 5
   end
 
   describe "initialize" do

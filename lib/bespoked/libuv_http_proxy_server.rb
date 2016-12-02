@@ -15,40 +15,56 @@ module Bespoked
       options[:BindAddress] ||= DEFAULT_LIBUV_SOCKET_BIND
       options[:Port] ||= DEFAULT_LIBUV_HTTP_PROXY_PORT
 
-      self.server = @run_loop.tcp
+      self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
+
+      #server.enable_simultaneous_accepts
+      #server.enable_nodelay
+
+      #dbp = FFI::MemoryPointer.new(:int)
+      #rc = ::Libuv::Ext.fileno(@server, dbp)
+      #@server.check_result!(rc)
+      #fd_val = dbp.get_int(0)
+      #socket = Socket.for_fd(fd_val)
+      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEPORT, true)
+      #socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_REUSEADDR, true)
+      #socket = nil
+      #dbp.free
 
       @server.catch do |reason|
-        self.record(:error, :rack_http_proxy_handler, [reason, reason.class])
+        puts reason.inspect
       end
 
-      puts [:bind_in, options[:Port]].inspect
-
+      puts options[:Port].to_i
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
-        puts :wtf
         handle_client(client)
       end
+    end
 
+    def start
+      puts :aaa
       @server.listen(1024)
     end
 
     def shutdown
-      puts :close_proxy
       @server.shutdown
+      @server.close
+      #@server = nil
     end
 
     def record(level = nil, name = nil, message = nil)
-      log_event = {:date => Time.now, :level => level, :name => name, :message => message}
-      @logger.notify(log_event)
+      if @logger
+        log_event = {:date => Time.now, :level => level, :name => name, :message => message}
+        @logger.notify(log_event)
+      end
     end
 
     def handle_client(client)
-      puts :got_client
-
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
 
       http_parser.on_headers_complete = proc do
-      puts :headers_complete
+        puts :headers_complete
+
         reading_state = :request_to_upstream
 
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
@@ -65,6 +81,8 @@ module Bespoked
 
         #TODO
         if url = out_url
+          puts :found_match
+
           host = url.host
           port = url.port
 
@@ -72,11 +90,14 @@ module Bespoked
 
           on_dns_bad = proc { |err|
             #run_loop.log(:warn, :dns_error, [err, err.class])
+            puts err
 
-            client.close
+            client.shutdown
           }
 
           on_dns_ok = proc { |addrinfo|
+            puts :dns_ok
+
             ip_address = addrinfo[0][0]
 
             #run_loop.log(:info, :ip_lookup, [host, ip_address, port.to_i, client.sockname, client.peername])
@@ -85,12 +106,15 @@ module Bespoked
 
             new_client.catch do |err|
               #run_loop.log(:warn, :rack_proxy_client_error, [err, err.class])
+              puts err
 
               client.close
             end
 
-            new_client.connect(ip_address, port.to_i) do |up_client|
-              up_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n")
+            new_client.connect(ip_address, port.to_i) do
+              puts :got_up
+
+              new_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n", wait: true)
 
               proxy_override_headers = {
                 #"Connection" => "close",
@@ -109,7 +133,7 @@ module Bespoked
               headers_for_upstream_request.each { |k, vs|
                 vs.split("\n").each { |v|
                   if k && v
-                    up_client.write "#{k}: #{v}\r\n"
+                    new_client.write "#{k}: #{v}\r\n"
                   end
                 }
               }
@@ -117,13 +141,15 @@ module Bespoked
               #run_loop.log(:debug, :wrote_upstream_request, [headers_for_upstream_request])
 
               #http_parser = nil
-              up_client.write("\r\n")
+              new_client.write("\r\n")
               if http_parser.upgrade_data
-                up_client.write(http_parser.upgrade_data)
+                new_client.write(http_parser.upgrade_data)
               end
               http_parser.reset!
 
-              up_client.progress do |chunk|
+              puts :reset_http_parser
+
+              new_client.progress do |chunk|
                 if client && chunk && chunk.length > 0
                   client.write(chunk)
                 end
@@ -131,8 +157,8 @@ module Bespoked
 
               client.progress do |chunk|
                 if reading_state == :request_to_upstream
-                  if up_client && chunk && chunk.length > 0
-                    up_client.write(chunk)
+                  if new_client && chunk && chunk.length > 0
+                    new_client.write(chunk)
                   end
                 end
               end
@@ -141,14 +167,15 @@ module Bespoked
             new_client.start_read
           }
 
-          do_dns_lookup = proc {
+          #do_dns_lookup = proc {
+          puts host
             run_loop.lookup(host, {:wait => false}).then(on_dns_ok, on_dns_bad)
-          }
+          #}
 
-          do_dns_lookup.call
+          #do_dns_lookup.call
         else
           puts :no_batch
-          client.close
+          client.shutdown
         end
 
         :stop
