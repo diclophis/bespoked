@@ -3,58 +3,48 @@
 module Bespoked
   class HijackWrapper
     def initialize(reader, writer)
-      puts :booze
+      #TODO: assert this is correct wrapper script
       @reader = reader
       @writer = writer
     end
 
     def call(*args)
-      puts :call
-      puts args.inspect
       self
     end
 
     def read
-      puts :read
       @reader.read
     end
     
     def write(chunk)
-      puts :write
       @writer.write(chunk)
     end
 
     def read_nonblock
-      puts :rnb
       read
     end
 
     def write_nonblock(chunk)
-      puts :wnb
       write(chunk)
     end
 
     def flush
-      puts :wtfasdasdasdasd
+      @writer.flush
     end
     
     def close
-      puts :closewrap
       @writer.close
     end
     
     def close_read
-      puts :closewrapread
       close
     end
     
     def close_write
-      puts :closewrapwrite
       close
     end
     
     def closed?
-      puts :close?
       @writer.closed?
     end
   end
@@ -142,8 +132,10 @@ module Bespoked
           'rack.url_scheme'   => "http",
 
           'rack.hijack?'      => true,
-          'rack.hijack'       => hijack_wrapper, #proc { |*env| puts "#{env}wtf!!!!!!!!!!!!!"; hijack_wrapper },
-          'rack.hijack_io'    => hijack_wrapper,
+          'rack.hijack'       => hijack_wrapper,
+
+          #proc { |*env| puts "#{env}wtf!!!!!!!!!!!!!"; hijack_wrapper },
+          #'rack.hijack_io'    => hijack_wrapper,
 
           'HTTP_VERSION'      => "HTTP/#{http_parser.http_version.join(".")}",
           "rack.errors"       => $stdout,
@@ -179,6 +171,7 @@ module Bespoked
         begin
           status, headers, body = @app.call(env)
         rescue => e
+          #TODO: see if this is needed, elsewise use logger
           puts e.inspect
           raise e
         end
@@ -190,7 +183,17 @@ module Bespoked
         #headers["Content-Length"] = length.to_s
 
         send_headers client, status, headers
-        send_body client, body
+
+        unless headers["Content-Type"] == "text/event-stream"
+          send_body client, body
+        else
+          Thread.new {
+            #TODO: figure out better plan
+            send_body client, body
+          }
+        end
+
+        #TODO: final touches on keep-alive
         #client.close
       end
 
