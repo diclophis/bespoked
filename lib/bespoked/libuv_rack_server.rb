@@ -37,6 +37,7 @@ module Bespoked
       host = nil
       port = nil
       host_header = nil
+      string_io = StringIO.new.set_encoding('ASCII-8BIT')
 
       # HTTP headers available
       http_parser.on_headers_complete = proc do
@@ -54,6 +55,7 @@ module Bespoked
       # One chunk of the body
       http_parser.on_body = proc do |chunk|
         #@run_loop.log(:info, :rack_http_on_body, [http_parser.headers])
+        string_io << chunk
       end
 
       # Headers and body is all parsed
@@ -80,7 +82,7 @@ module Bespoked
           "rack.multithread"  => "false",
           "rack.multiprocess" => "false",
           "rack.run_once"     => "true",
-          "rack.input"        => StringIO.new.set_encoding('ASCII-8BIT'),
+          "rack.input"        => string_io, #StringIO.new.set_encoding('ASCII-8BIT'),
           "RACK_INPUT"        => ""
         )
 
@@ -89,16 +91,18 @@ module Bespoked
         env['REQUEST_METHOD'] = http_parser.http_method
         env['PATH_INFO'] = http_parser.request_url
         env['REQUEST_PATH'] = http_parser.request_url
-        env["SERVER_NAME"] = (http_parser.headers["host"] || http_parser.headers["Host"])
+        env["SERVER_NAME"] = host #(http_parser.headers["host"] || http_parser.headers["Host"])
         puts http_parser.methods - 1.methods
-        env["HTTP_HOST"] = host_header
         env["SERVER_PORT"] = port.to_s
+
+puts http_parser.headers.keys.inspect
+
+        env["HTTP_COOKIE"] = http_parser.headers["Cookie"] || ""
 
         begin
           status, headers, body = @app.call(env)
 
-puts [status, headers].inspect
-
+          puts [status, headers].inspect
         rescue => e
           puts e.inspect
         end
@@ -112,8 +116,6 @@ puts [status, headers].inspect
         send_headers client, status, headers
         send_body client, body
         client.close
-
-        #@run_loop.log(:debug, :rack_http_sent_response, [status, headers, body])
       end
 
       ##################
@@ -129,7 +131,9 @@ puts [status, headers].inspect
       client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n"
       headers.each { |k, vs|
         vs.split("\n").each { |v|
-          client.write "#{k}: #{v}\r\n"
+          out = "#{k}: #{v}\r\n"
+          puts out
+          client.write out
         }
       }
       client.write "\r\n"
