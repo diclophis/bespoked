@@ -1,11 +1,5 @@
 #!/usr/bin/env ruby
 
-$:.unshift File.dirname(__FILE__)
-
-require 'config/environment'
-
-#$rack_server = nil
-
 module Bespoked
   module RackHandler
     def self.run(app, options = {})
