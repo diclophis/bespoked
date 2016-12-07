@@ -105,7 +105,7 @@ HERE
           #client.shutdown
         end
 
-        client.connect(DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]) do
+        client.connect(Bespoked::DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]) do
           client.write(MOCK_HTTP_REQUEST, wait: true)
           client.start_read
         end

@@ -1,6 +1,21 @@
 #
+require 'yaml'
+require 'open3'
+require 'digest/md5'
+require 'libuv'
+require 'libuv/coroutines'
+require 'http/parser'
+require 'yajl'
+require 'rack'
+require 'rack/handler'
+require 'socket'
+require 'webrick'
 
 module Bespoked
+  DEFAULT_LIBUV_SOCKET_BIND = "0:0:0:0:0:0:0:0"
+  #DEFAULT_LIBUV_SOCKET_BIND = "127.0.0.1"
+  #DEFAULT_LIBUV_SOCKET_BIND = "0.0.0.0"
+
   # bind... are "servers"
   autoload :LibUVRackServer, 'bespoked/libuv_rack_server'
   autoload :LibUVHttpProxyServer, 'bespoked/libuv_http_proxy_server'
