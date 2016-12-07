@@ -13,6 +13,8 @@ module Bespoked
           puts [foo_bar, log_entry].inspect
         end
 
+        foo_bar.start
+
         exception_handler.notifier do |error, message, trace|
           logger.notify({:date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})
         end
