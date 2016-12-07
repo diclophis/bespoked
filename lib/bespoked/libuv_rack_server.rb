@@ -34,12 +34,17 @@ module Bespoked
 
     def handle_client(client)
       http_parser = Http::Parser.new
+      host = nil
+      port = nil
+      host_header = nil
 
       # HTTP headers available
       http_parser.on_headers_complete = proc do
         #@run_loop.log(:debug, :http_rack_headers, http_parser.headers)
 
-        url = URI.parse("http://" + (http_parser.headers["host"] || http_parser.headers["Host"]))
+        host_header = (http_parser.headers["host"] || http_parser.headers["Host"])
+
+        url = URI.parse("http://" + host_header)
         host = url.host
         port = url.port
 
@@ -85,9 +90,18 @@ module Bespoked
         env['PATH_INFO'] = http_parser.request_url
         env['REQUEST_PATH'] = http_parser.request_url
         env["SERVER_NAME"] = (http_parser.headers["host"] || http_parser.headers["Host"])
-        env["SERVER_PORT"] = "1234"
+        puts http_parser.methods - 1.methods
+        env["HTTP_HOST"] = host_header
+        env["SERVER_PORT"] = port.to_s
 
-        status, headers, body = @app.call(env)
+        begin
+          status, headers, body = @app.call(env)
+
+puts [status, headers].inspect
+
+        rescue => e
+          puts e.inspect
+        end
 
         length = 0
         body.each { |b|
