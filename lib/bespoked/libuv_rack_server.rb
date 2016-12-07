@@ -165,11 +165,7 @@ module Bespoked
         #env['SCRIPT_NAME'] = "" $TODO #path_info #http_parser.request_url
         env['REQUEST_PATH'] = http_parser.request_url
         env["SERVER_NAME"] = host #(http_parser.headers["host"] || http_parser.headers["Host"])
-        puts http_parser.methods - 1.methods
         env["SERVER_PORT"] = port.to_s
-
-puts http_parser.headers.keys.inspect
-puts http_parser.request_url
 
         env["HTTP_COOKIE"] = http_parser.headers["Cookie"] || ""
         env["CONTENT_TYPE"] = http_parser.headers["Content-Type"] || ""
@@ -182,10 +178,9 @@ puts http_parser.request_url
 
         begin
           status, headers, body = @app.call(env)
-
-          puts [status, headers].inspect
         rescue => e
           puts e.inspect
+          raise e
         end
 
         #length = 0
@@ -213,7 +208,6 @@ puts http_parser.request_url
       headers.each { |k, vs|
         vs.split("\n").each { |v|
           out = "#{k}: #{v}\r\n"
-          puts out
           client.write out
         }
       }
