@@ -1,6 +1,64 @@
 #
 
 module Bespoked
+  class HijackWrapper
+    def initialize(reader, writer)
+      puts :booze
+      @reader = reader
+      @writer = writer
+    end
+
+    def call(*args)
+      puts :call
+      puts args.inspect
+      self
+    end
+
+    def read
+      puts :read
+      @reader.read
+    end
+    
+    def write(chunk)
+      puts :write
+      @writer.write(chunk)
+    end
+
+    def read_nonblock
+      puts :rnb
+      read
+    end
+
+    def write_nonblock(chunk)
+      puts :wnb
+      write(chunk)
+    end
+
+    def flush
+      puts :wtfasdasdasdasd
+    end
+    
+    def close
+      puts :closewrap
+      @writer.close
+    end
+    
+    def close_read
+      puts :closewrapread
+      close
+    end
+    
+    def close_write
+      puts :closewrapwrite
+      close
+    end
+    
+    def closed?
+      puts :close?
+      @writer.closed?
+    end
+  end
+
   class LibUVRackServer
     attr_accessor :run_loop,
                   :app,
@@ -38,6 +96,8 @@ module Bespoked
       port = nil
       host_header = nil
       string_io = StringIO.new.set_encoding('ASCII-8BIT')
+      query_string = nil
+      path_info = nil
 
       # HTTP headers available
       http_parser.on_headers_complete = proc do
@@ -45,9 +105,12 @@ module Bespoked
 
         host_header = (http_parser.headers["host"] || http_parser.headers["Host"])
 
-        url = URI.parse("http://" + host_header)
+        url = URI.parse("http://" + host_header + http_parser.request_url)
         host = url.host
         port = url.port
+
+        query_string = url.query
+        path_info = url.path
 
         #@run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
       end
@@ -62,22 +125,28 @@ module Bespoked
       http_parser.on_message_complete = proc do |env|
         #@run_loop.log(:info, :rack_http_on_message_completed, nil)
 
+        hijack_wrapper = HijackWrapper.new(string_io, client)
+
         env = {}
 
         env.update(
           'RACK_VERSION'      => ::Rack::VERSION.to_s,
           #'RACK_INPUT'        => StringIO.new,
-          'RACK_ERRORS'       => String.new,
-          'RACK_MULTITHREAD'  => "false",
-          'RACK_MULTIPROCESS' => "false",
-          'RACK_RUNONCE'      => "false",
+          'RACK_ERRORS'       => "",
+
+          #'RACK_MULTITHREAD'  => "false",
+          #'RACK_MULTIPROCESS' => "false",
+          #'RACK_RUNONCE'      => "false",
+
           'RACK_URL_SCHEME'   => "http",
           'rack.url_scheme'   => "http",
-          'RACK_IS_HIJACK'    => "false",
-          'RACK_HIJACK'       => "", #lambda { raise NotImplementedError, "only partial hijack is supported."},
-          'RACK_HIJACK_IO'    => "",
+
+          'rack.hijack?'      => true,
+          'rack.hijack'       => hijack_wrapper, #proc { |*env| puts "#{env}wtf!!!!!!!!!!!!!"; hijack_wrapper },
+          'rack.hijack_io'    => hijack_wrapper,
+
           'HTTP_VERSION'      => "HTTP/#{http_parser.http_version.join(".")}",
-          "rack.errors"       => $stderr,
+          "rack.errors"       => $stdout,
           "rack.version"      => ::Rack::VERSION.to_s.split("."),
           "rack.multithread"  => "false",
           "rack.multiprocess" => "false",
@@ -85,19 +154,31 @@ module Bespoked
           "rack.input"        => string_io, #StringIO.new.set_encoding('ASCII-8BIT'),
           "RACK_INPUT"        => ""
         )
+        
+        #'RACK_IS_HIJACK'    => "false",
+        #'RACK_HIJACK'       => lambda { raise NotImplementedError, "only partial hijack is supported."},
 
         env['HTTP_VERSION'] ||= env['SERVER_PROTOCOL']
-        env['QUERY_STRING'] ||= ""
+        env['QUERY_STRING'] ||= query_string || ""
         env['REQUEST_METHOD'] = http_parser.http_method
-        env['PATH_INFO'] = http_parser.request_url
+        env['PATH_INFO'] = path_info #http_parser.request_url
+        #env['SCRIPT_NAME'] = "" $TODO #path_info #http_parser.request_url
         env['REQUEST_PATH'] = http_parser.request_url
         env["SERVER_NAME"] = host #(http_parser.headers["host"] || http_parser.headers["Host"])
         puts http_parser.methods - 1.methods
         env["SERVER_PORT"] = port.to_s
 
 puts http_parser.headers.keys.inspect
+puts http_parser.request_url
 
         env["HTTP_COOKIE"] = http_parser.headers["Cookie"] || ""
+        env["CONTENT_TYPE"] = http_parser.headers["Content-Type"] || ""
+        env["CONTENT_LENGTH"] = http_parser.headers["Content-Length"] || "0"
+        env["HTTP_ACCEPT"] = http_parser.headers["Accept"] || "0"
+
+        ["Accept-Language", "Accept-Encoding", "Connection", "Upgrade-Insecure-Requests"].each do |inbh|
+          env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser.headers[inbh] if  http_parser.headers[inbh]
+        end
 
         begin
           status, headers, body = @app.call(env)
@@ -107,15 +188,15 @@ puts http_parser.headers.keys.inspect
           puts e.inspect
         end
 
-        length = 0
-        body.each { |b|
-          length += b.length
-        }
-        headers["Content-Length"] = length.to_s
+        #length = 0
+        #body.each { |b|
+        #  length += b.length
+        #}
+        #headers["Content-Length"] = length.to_s
 
         send_headers client, status, headers
         send_body client, body
-        client.close
+        #client.close
       end
 
       ##################
