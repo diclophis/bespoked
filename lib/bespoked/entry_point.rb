@@ -13,6 +13,7 @@ module Bespoked
                   :watches,
                   :dashboard,
                   :health_controller,
+                  :dashboard_controller,
                   :failure_to_auth_timer,
                   :reconnect_timer,
                   :authenticated,
@@ -56,13 +57,14 @@ module Bespoked
       self.authenticated = false
       self.stopping = false
 
-      self.health_controller = Bespoked::HealthController.new(@run_loop)
-
       self.proxy_controller_factory_class = Bespoked.const_get(options["proxy-controller-factory-class"] || "RackProxyController")
       self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self)
 
-      self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "DebugWatchFactory")
+      self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "KubernetesApiWatchFactory")
       self.watch_factory = @watch_factory_class.new(@run_loop)
+
+      self.health_controller = Bespoked::HealthController.new(@run_loop)
+      self.dashboard_controller = Bespoked::DashboardController.new(@run_loop, @proxy_controller)
 
       self.watches = []
 
@@ -111,6 +113,7 @@ module Bespoked
       @stopping = true
       @proxy_controller.shutdown
       @health_controller.shutdown
+      @dashboard_controller.shutdown
     end
 
     def on_failed_to_auth_cb
@@ -130,6 +133,7 @@ module Bespoked
 
       @proxy_controller.start
       @health_controller.start
+      @dashboard_controller.start
 
       self.failure_to_auth_timer = @run_loop.timer
       @failure_to_auth_timer.progress do

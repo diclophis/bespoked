@@ -62,6 +62,8 @@ module Bespoked
           out_url = URI.parse("http://" + mapped_host_port)
         end
 
+        record :info, :in_out_url, [in_url, out_url].inspect
+
         #TODO
         if url = out_url
           host = url.host
@@ -71,7 +73,8 @@ module Bespoked
 
           on_dns_bad = proc { |err|
             #run_loop.log(:warn, :dns_error, [err, err.class])
-            puts err
+            #puts err
+            record :info, :bad_dns, [err, err.class].inspect
 
             client.shutdown
           }
@@ -79,14 +82,12 @@ module Bespoked
           on_dns_ok = proc { |addrinfo|
             ip_address = addrinfo[0][0]
 
-            #run_loop.log(:info, :ip_lookup, [host, ip_address, port.to_i, client.sockname, client.peername])
+            record :info, :dns_ok, [host, ip_address, port.to_i, client.sockname, client.peername].inspect 
 
             new_client = run_loop.tcp
 
             new_client.catch do |err|
-              #run_loop.log(:warn, :rack_proxy_client_error, [err, err.class])
-              puts err
-
+              record :info, :rack_proxy_client_error, [err, err.class].inspect
               client.close
             end
 
@@ -94,7 +95,6 @@ module Bespoked
               new_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n", wait: true)
 
               proxy_override_headers = {
-                #"Connection" => "close",
                 "X-Forwarded-For" => client.peername[0] || "", # NOTE: makes the actual IP available
                 "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
                 "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning
@@ -110,12 +110,13 @@ module Bespoked
               headers_for_upstream_request.each { |k, vs|
                 vs.split("\n").each { |v|
                   if k && v
-                    new_client.write "#{k}: #{v}\r\n"
+                    new_client.write "#{k}: #{v}\r\n", {wait: true}
                   end
                 }
               }
 
               #run_loop.log(:debug, :wrote_upstream_request, [headers_for_upstream_request])
+              record :info, :wrote_upstream_request, [headers_for_upstream_request].inspect 
 
               #http_parser = nil
               new_client.write("\r\n")
@@ -142,9 +143,11 @@ module Bespoked
             new_client.start_read
           }
 
+          record :info, :doing_dns, [host].inspect
           run_loop.lookup(host, {:wait => false}).then(on_dns_ok, on_dns_bad)
         else
-          puts :no_match
+          #puts :no_match
+          record :info, :no_match, [].inspect
           client.shutdown
         end
 
