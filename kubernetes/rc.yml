@@ -78,8 +78,8 @@ spec:
       - image: #NOTE: this is re-written via manifest.rb
         imagePullPolicy: Always
         env:
-        - name: MOCK_X_FORWARDED_PROTO
-          value: "https"
+        #- name: MOCK_X_FORWARDED_PROTO
+        #  value: "https"
         name: bespoked-controller
         resources:
           limits:
