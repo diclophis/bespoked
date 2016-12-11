@@ -33,7 +33,6 @@ module Bespoked
     def shutdown
       @server.shutdown
       @server.close
-      #@server = nil
     end
 
     def record(level = nil, name = nil, message = nil)
@@ -46,6 +45,14 @@ module Bespoked
     def handle_client(client)
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
+      body_left_over = nil
+
+      new_client = run_loop.tcp
+
+      new_client.catch do |err|
+        record :info, :rack_proxy_client_error, [err, err.class].inspect
+        client.close
+      end
 
       http_parser.on_headers_complete = proc do
         reading_state = :request_to_upstream
@@ -54,9 +61,6 @@ module Bespoked
 
         in_url = URI.parse("http://" + env["HTTP_HOST"])
         out_url = nil
-
-        #puts in_url
-        #puts @proxy_controller.vhosts.inspect
 
         if mapped_host_port = @proxy_controller.vhosts[in_url.host]
           out_url = URI.parse("http://" + mapped_host_port)
@@ -84,21 +88,26 @@ module Bespoked
 
             record :info, :dns_ok, [host, ip_address, port.to_i, client.sockname, client.peername].inspect 
 
-            new_client = run_loop.tcp
-
-            new_client.catch do |err|
-              record :info, :rack_proxy_client_error, [err, err.class].inspect
-              client.close
+            new_client.progress do |chunk|
+              #record :info, :got_response_from_upstream, [chunk].inspect
+              if client && chunk && chunk.length > 0
+                #record :info, :got_response_from_upstream, [chunk].inspect
+                client.write(chunk)
+              end
             end
 
             new_client.connect(ip_address, port.to_i) do
-              new_client.write("#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n", wait: true)
+
+              upstream_handshake = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
+              #record :info, :handshare_up, [upstream_handshake].inspect
+              new_client.write(upstream_handshake, wait: true)
 
               proxy_override_headers = {
                 "X-Forwarded-For" => client.peername[0] || "", # NOTE: makes the actual IP available
                 "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
                 "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning
                 "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
+                #"Accept-Encoding" => "" # strip gzip for now
               }
 
               if ENV["MOCK_X_FORWARDED_PROTO"]
@@ -110,40 +119,30 @@ module Bespoked
               headers_for_upstream_request.each { |k, vs|
                 vs.split("\n").each { |v|
                   if k && v
-                    new_client.write "#{k}: #{v}\r\n", {wait: true}
+                    new_client.write "#{k}: #{v}\r\n", {:wait => true}
                   end
                 }
               }
 
-              #run_loop.log(:debug, :wrote_upstream_request, [headers_for_upstream_request])
-              record :info, :wrote_upstream_request, [headers_for_upstream_request].inspect 
-
-              #http_parser = nil
-              new_client.write("\r\n")
-              if http_parser.upgrade_data
-                new_client.write(http_parser.upgrade_data)
+              new_client.write("\r\n", {:wait =>  true})
+              if http_parser.upgrade_data && http_parser.upgrade_data.length > 0
+                #record :info, :got_upgrade_data, [http_parser.upgrade_data].inspect
+                new_client.write(http_parser.upgrade_data, {:wait => true})
               end
               http_parser.reset!
 
-              new_client.progress do |chunk|
-                if client && chunk && chunk.length > 0
-                  client.write(chunk)
-                end
+              if body_left_over && body_left_over.length > 0
+                #record :info, :has_left_over, [body_left_over].inspect
+                new_client.write(body_left_over, {:wait => true})
               end
 
-              client.progress do |chunk|
-                if reading_state == :request_to_upstream
-                  if new_client && chunk && chunk.length > 0
-                    new_client.write(chunk)
-                  end
-                end
-              end
+              #record :info, :wrote_upstream_request, [headers_for_upstream_request, body_left_over.length].inspect 
+
+              new_client.start_read
             end
-
-            new_client.start_read
           }
 
-          record :info, :doing_dns, [host].inspect
+          #record :info, :doing_dns, [host].inspect
           run_loop.lookup(host, {:wait => false}).then(on_dns_ok, on_dns_bad)
         else
           #puts :no_match
@@ -157,9 +156,20 @@ module Bespoked
       ##################
 
       client.progress do |chunk|
+        if reading_state == :request_to_upstream
+          if new_client && chunk && chunk.length > 0
+            #record :info, :got_more_requests_from_browser_agent, [chunk].inspect
+            new_client.write(chunk)
+          end
+        end
+
         if http_parser && reading_state == :request_to_proxy
           if chunk && chunk.length > 0
-            http_parser << chunk
+            #record :info, :first_inbound_pipe, [chunk, chunk.length, chunk.class].inspect
+            offset_of_body_left_in_buffer = http_parser << chunk
+            #record :info, :left_over_offset, [offset_of_body_left_in_buffer].inspect
+            body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
+            #record :info, :wtf, [body_left_over].inspect
           end
         end
       end

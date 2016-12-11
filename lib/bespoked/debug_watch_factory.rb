@@ -21,13 +21,13 @@ module Bespoked
             "spec": {
                 "rules": [
                     {
-                        "host": "example.ingress",
+                        "host": "localhost",
                         "http": {
                             "paths": [
                                 {
                                     "backend": {
-                                        "serviceName": "w3.org",
-                                        "servicePort": 80
+                                        "serviceName": "localhost",
+                                        "servicePort": 3100
                                     }
                                 }
                             ]
@@ -46,7 +46,7 @@ module Bespoked
             "kind": "Service",
             "apiVersion": "v1",
             "metadata": {
-                "name": "w3.org",
+                "name": "localhost",
                 "resourceVersion": "20289",
                 "labels": {
                     "ttl": "24"
@@ -58,12 +58,12 @@ module Bespoked
                 "ports": [
                     {   
                         "protocol": "TCP",
-                        "port": 80,
-                        "targetPort": 80
+                        "port": 3100,
+                        "targetPort": 3100
                     }
                 ],
                 "selector": {
-                    "name": "www.w3.org"
+                    "name": "localhost"
                 },
                 "clusterIP": "127.0.0.1",
                 "type": "ClusterIP",
