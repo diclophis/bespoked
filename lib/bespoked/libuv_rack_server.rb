@@ -81,10 +81,7 @@ module Bespoked
     end
 
     def handle_client(client)
-@run_loop.work(proc {
-#Thread.new {
-
-
+#      @run_loop.work(proc {
 
       http_parser = Http::Parser.new
       url = nil
@@ -178,23 +175,12 @@ module Bespoked
           env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser.headers[inbh] if  http_parser.headers[inbh]
         end
 
-        #begin
-          status = nil
-          headers = nil
-          body = nil
-          Thread.new {
-            status, headers, body = @app.call(env)
-ActiveRecord::Base.clear_active_connections!
-ActiveRecord::Base.connection.close
-          }.join
-          #ThreadError: deadlock; recursive locking
-#ActiveRecord::Base.connection_pool.release_connection
-
-        #rescue => e
-        #  #TODO: see if this is needed, elsewise use logger
-        #  puts e.inspect
-        #  raise e
-        #end
+        status = nil
+        headers = nil
+        body = nil
+        Thread.new {
+          status, headers, body = @app.call(env)
+        }.join
 
         unless headers["Content-Length"]
           length = 0
@@ -209,18 +195,8 @@ ActiveRecord::Base.connection.close
         unless headers["Content-Type"] == "text/event-stream"
           send_body client, body
         else
-          #Thread.new {
-            #TODO: figure out better plan
-            send_body client, body
-          #}
+          send_body client, body
         end
-
-        #}
-        #.join
-        puts :foop
-
-        #TODO: final touches on keep-alive
-        #client.close
       end
 
       ##################
@@ -230,9 +206,6 @@ ActiveRecord::Base.connection.close
       end
 
       client.start_read
-
-#}.join
-    })
     end
 
     def send_headers(client, status, headers)
