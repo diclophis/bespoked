@@ -8,7 +8,7 @@ spec:
   # The default backend must be of type NodePort.
   type: NodePort
   ports:
-  - nodePort: 30001
+  - nodePort: 80
     port: 8888
     targetPort: 8888
     protocol: TCP
@@ -78,8 +78,8 @@ spec:
       - image: #NOTE: this is re-written via manifest.rb
         imagePullPolicy: Always
         env:
-        #- name: MOCK_X_FORWARDED_PROTO
-        #  value: "https"
+        - name: HTTP_EXAMPLE_X_FORWARDED_PROTO
+          value: "https"
         name: bespoked-controller
         resources:
           limits:
