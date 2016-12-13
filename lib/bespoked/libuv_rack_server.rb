@@ -81,7 +81,8 @@ module Bespoked
     end
 
     def handle_client(client)
-      @run_loop.work(proc {
+      #@run_loop.work(proc {
+      #Thread.new do
 
       http_parser = Http::Parser.new
       url = nil
@@ -146,16 +147,16 @@ module Bespoked
           "rack.version"      => ::Rack::VERSION.to_s.split("."),
           "rack.multithread"  => true,
           "rack.multiprocess" => false,
-          "rack.run_once"     => "true",
+          "rack.run_once"     => true,
           "rack.input"        => string_io, #StringIO.new.set_encoding('ASCII-8BIT'),
-          "rack.logger"       => $logger,
+          #"rack.logger"       => $logger,
           "RACK_INPUT"        => ""
         )
         
         #'RACK_IS_HIJACK'    => "false",
         #'RACK_HIJACK'       => lambda { raise NotImplementedError, "only partial hijack is supported."},
 
-        env['HTTP_VERSION'] ||= env['SERVER_PROTOCOL']
+        #env['HTTP_VERSION'] ||= env['SERVER_PROTOCOL']
         env['QUERY_STRING'] ||= query_string || ""
         env['REQUEST_METHOD'] = http_parser.http_method
 
@@ -178,9 +179,9 @@ module Bespoked
         status = nil
         headers = nil
         body = nil
-        Thread.new {
+        #Thread.new {
           status, headers, body = @app.call(env)
-        }.join
+        #}.join
 
         #unless headers["Content-Length"]
         #  length = 0
@@ -190,11 +191,15 @@ module Bespoked
         #  headers["Content-Length"] = length.to_s
         #end
 
-        send_headers client, status, headers
-
-        unless headers["Content-Type"] == "text/event-stream"
-          send_body client, body
+        if headers["Content-Type"] == "text/event-stream"
+          Thread.new do
+          #@run_loop.work(proc {
+            send_headers client, status, headers
+            send_body client, body
+          #})
+          end
         else
+          send_headers client, status, headers
           send_body client, body
         end
       end
@@ -206,15 +211,17 @@ module Bespoked
       end
 
       client.start_read
-      })
+
+      #})
+      #end
     end
 
     def send_headers(client, status, headers)
-      client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n"
+      client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n", {:wait => false}
       headers.each { |k, vs|
         vs.split("\n").each { |v|
           out = "#{k}: #{v}\r\n"
-          client.write out, {:wait => true}
+          client.write out, {:wait => false}
         }
       }
       client.write "\r\n"
@@ -222,7 +229,7 @@ module Bespoked
 
     def send_body(client, body)
       body.each { |part|
-        client.write part, {:wait => true}
+        client.write part, {:wait => false}
       }
     end
   end
