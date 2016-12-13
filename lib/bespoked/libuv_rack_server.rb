@@ -81,7 +81,7 @@ module Bespoked
     end
 
     def handle_client(client)
-#      @run_loop.work(proc {
+      @run_loop.work(proc {
 
       http_parser = Http::Parser.new
       url = nil
@@ -206,6 +206,7 @@ module Bespoked
       end
 
       client.start_read
+      })
     end
 
     def send_headers(client, status, headers)
