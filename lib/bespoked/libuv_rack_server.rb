@@ -81,6 +81,11 @@ module Bespoked
     end
 
     def handle_client(client)
+@run_loop.work(proc {
+#Thread.new {
+
+
+
       http_parser = Http::Parser.new
       url = nil
       host = nil
@@ -178,9 +183,13 @@ module Bespoked
           headers = nil
           body = nil
           Thread.new {
-ActiveRecord::Base.connection.disconnect!
-ActiveRecord::Base.establish_connection
             status, headers, body = @app.call(env)
+ActiveRecord::Base.clear_active_connections!
+ActiveRecord::Base.connection.close
+          }.join
+          #ThreadError: deadlock; recursive locking
+#ActiveRecord::Base.connection_pool.release_connection
+
         #rescue => e
         #  #TODO: see if this is needed, elsewise use logger
         #  puts e.inspect
@@ -206,7 +215,8 @@ ActiveRecord::Base.establish_connection
           #}
         end
 
-        }.join
+        #}
+        #.join
         puts :foop
 
         #TODO: final touches on keep-alive
@@ -220,6 +230,9 @@ ActiveRecord::Base.establish_connection
       end
 
       client.start_read
+
+#}.join
+    })
     end
 
     def send_headers(client, status, headers)
@@ -227,7 +240,7 @@ ActiveRecord::Base.establish_connection
       headers.each { |k, vs|
         vs.split("\n").each { |v|
           out = "#{k}: #{v}\r\n"
-          client.write out
+          client.write out, {:wait => true}
         }
       }
       client.write "\r\n"
@@ -235,7 +248,7 @@ ActiveRecord::Base.establish_connection
 
     def send_body(client, body)
       body.each { |part|
-        client.write part
+        client.write part, {:wait => true}
       }
     end
   end
