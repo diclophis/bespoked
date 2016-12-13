@@ -182,13 +182,13 @@ module Bespoked
           status, headers, body = @app.call(env)
         }.join
 
-        unless headers["Content-Length"]
-          length = 0
-          body.each { |b|
-            length += b.length
-          }
-          headers["Content-Length"] = length.to_s
-        end
+        #unless headers["Content-Length"]
+        #  length = 0
+        #  body.each { |b|
+        #    length += b.length
+        #  }
+        #  headers["Content-Length"] = length.to_s
+        #end
 
         send_headers client, status, headers
 
