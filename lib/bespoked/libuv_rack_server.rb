@@ -82,6 +82,7 @@ module Bespoked
 
     def handle_client(client)
       http_parser = Http::Parser.new
+      url = nil
       host = nil
       port = nil
       host_header = nil
@@ -94,8 +95,9 @@ module Bespoked
         #@run_loop.log(:debug, :http_rack_headers, http_parser.headers)
 
         host_header = (http_parser.headers["host"] || http_parser.headers["Host"])
+        forwarded_scheme = (http_parser.headers["X-Forwarded-Proto"] || "http")
 
-        url = URI.parse("http://" + host_header + http_parser.request_url)
+        url = URI.parse("#{forwarded_scheme}://" + host_header + http_parser.request_url)
         host = url.host
         port = url.port
 
@@ -128,8 +130,8 @@ module Bespoked
           #'RACK_MULTIPROCESS' => "false",
           #'RACK_RUNONCE'      => "false",
 
-          'RACK_URL_SCHEME'   => "http",
-          'rack.url_scheme'   => "http",
+          #'RACK_URL_SCHEME'   => "https",
+          'rack.url_scheme'   => url.scheme,
 
           'rack.hijack?'      => true,
           'rack.hijack'       => hijack_wrapper,
@@ -140,10 +142,11 @@ module Bespoked
           'HTTP_VERSION'      => "HTTP/#{http_parser.http_version.join(".")}",
           "rack.errors"       => $stdout,
           "rack.version"      => ::Rack::VERSION.to_s.split("."),
-          "rack.multithread"  => "false",
-          "rack.multiprocess" => "false",
+          "rack.multithread"  => true,
+          "rack.multiprocess" => false,
           "rack.run_once"     => "true",
           "rack.input"        => string_io, #StringIO.new.set_encoding('ASCII-8BIT'),
+          "rack.logger"       => $logger,
           "RACK_INPUT"        => ""
         )
         
@@ -153,9 +156,11 @@ module Bespoked
         env['HTTP_VERSION'] ||= env['SERVER_PROTOCOL']
         env['QUERY_STRING'] ||= query_string || ""
         env['REQUEST_METHOD'] = http_parser.http_method
+
         env['PATH_INFO'] = path_info #http_parser.request_url
-        #env['SCRIPT_NAME'] = "" $TODO #path_info #http_parser.request_url
-        env['REQUEST_PATH'] = http_parser.request_url
+        env['SCRIPT_NAME'] = "" #path_info #== "/" ? "" : path_info #http_parser.request_url
+        #env['REQUEST_PATH'] = path_info #http_parser.request_url
+
         env["SERVER_NAME"] = host #(http_parser.headers["host"] || http_parser.headers["Host"])
         env["SERVER_PORT"] = port.to_s
 
@@ -168,30 +173,41 @@ module Bespoked
           env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser.headers[inbh] if  http_parser.headers[inbh]
         end
 
-        begin
-          status, headers, body = @app.call(env)
-        rescue => e
-          #TODO: see if this is needed, elsewise use logger
-          puts e.inspect
-          raise e
-        end
+        #begin
+          status = nil
+          headers = nil
+          body = nil
+          Thread.new {
+ActiveRecord::Base.connection.disconnect!
+ActiveRecord::Base.establish_connection
+            status, headers, body = @app.call(env)
+        #rescue => e
+        #  #TODO: see if this is needed, elsewise use logger
+        #  puts e.inspect
+        #  raise e
+        #end
 
-        #length = 0
-        #body.each { |b|
-        #  length += b.length
-        #}
-        #headers["Content-Length"] = length.to_s
+        unless headers["Content-Length"]
+          length = 0
+          body.each { |b|
+            length += b.length
+          }
+          headers["Content-Length"] = length.to_s
+        end
 
         send_headers client, status, headers
 
         unless headers["Content-Type"] == "text/event-stream"
           send_body client, body
         else
-          Thread.new {
+          #Thread.new {
             #TODO: figure out better plan
             send_body client, body
-          }
+          #}
         end
+
+        }.join
+        puts :foop
 
         #TODO: final touches on keep-alive
         #client.close
