@@ -28,9 +28,9 @@ module Bespoked
       @reader.rewind
     end
 
-    def read
+    def read(length = nil)
       read = @reader.read
-      puts [:van_read, read].inspect
+      puts [:van_read, length, read].inspect
       read
     end
     
@@ -101,28 +101,34 @@ module Bespoked
     def handle_client(client)
       #Thread.new do
 
-      http_parser = Http::Parser.new
-      url = nil
-      host = nil
-      port = nil
-      host_header = nil
-      string_io = StringIO.new.set_encoding('ASCII-8BIT')
-      query_string = nil
-      path_info = nil
+      outer_http_parser = Http::Parser.new
+
       defer_until_after_body = @run_loop.defer
 
       puts [:sdsdsdsdsd, defer_until_after_body].inspect
 
       # One chunk of the body
-      http_parser.on_body = proc do |chunk|
+      outer_http_parser.on_body = proc do |chunk|
         puts "!#!@#!@#!@#"
         #@run_loop.log(:info, :rack_http_on_body, [http_parser.headers])
         #string_io << chunk
       end
 
       # HTTP headers available
-      http_parser.on_headers_complete = proc do
+      outer_http_parser.on_headers_complete = proc do
+        defer_until_after_body.promise.progress do |http_parser, string_io|
+          #Thread.new {
         #@run_loop.log(:debug, :http_rack_headers, http_parser.headers)
+
+        puts [http_parser, http_parser.headers, string_io].inspect
+
+      url = nil
+      host = nil
+      port = nil
+      host_header = nil
+      #string_io = StringIO.new.set_encoding('ASCII-8BIT')
+      query_string = nil
+      path_info = nil
 
         host_header = (http_parser.headers["host"] || http_parser.headers["Host"])
         forwarded_scheme = (http_parser.headers["X-Forwarded-Proto"] || "http")
@@ -204,15 +210,15 @@ module Bespoked
 
         puts [:foop, defer_until_after_body].inspect
 
-        defer_until_after_body.promise.progress do |cheese|
+
+
           puts [:cheese, :resolved].inspect
 
           status = nil
           headers = nil
           body = nil
-          Thread.new {
-            status, headers, body = @app.call(env)
-          }.join
+
+          status, headers, body = @app.call(env)
 
           if headers["Content-Type"] == "text/event-stream"
             Thread.new do
@@ -233,7 +239,14 @@ module Bespoked
             send_headers client, status, headers, true
             send_body client, body, true
           end
+
+          #}.join
+
+          outer_http_parser.reset!
         end
+
+        #outer_http_parser.reset!
+        #outer_http_parser = Http::Parser.new
 
         :stop
       end
@@ -243,12 +256,13 @@ module Bespoked
       client.progress do |chunk|
         #http_parser << chunk
 
-        offset_of_body_left_in_buffer = http_parser << chunk
+        offset_of_body_left_in_buffer = outer_http_parser << chunk
         body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
         puts [:cheese, defer_until_after_body, body_left_over].inspect
-        string_io << (body_left_over)
+        string_io = StringIO.new(body_left_over).set_encoding('ASCII-8BIT')
         string_io.rewind
-        defer_until_after_body.notify(true)
+        #string_io << (body_left_over)
+        defer_until_after_body.notify(outer_http_parser, string_io)
       end
 
       client.start_read
