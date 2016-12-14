@@ -12,8 +12,26 @@ module Bespoked
       self
     end
 
+    def gets
+      read = @reader.read
+      puts [:gets, read].inspect
+      read
+    end
+
+    def each
+      read = @reader.read
+      puts [:each, read].inspect
+      yield @reader.read
+    end
+
+    def rewind
+      @reader.rewind
+    end
+
     def read
-      @reader.read
+      read = @reader.read
+      puts [:van_read, read].inspect
+      read
     end
     
     def write(chunk)
@@ -81,7 +99,6 @@ module Bespoked
     end
 
     def handle_client(client)
-      #@run_loop.work(proc {
       #Thread.new do
 
       http_parser = Http::Parser.new
@@ -92,6 +109,16 @@ module Bespoked
       string_io = StringIO.new.set_encoding('ASCII-8BIT')
       query_string = nil
       path_info = nil
+      defer_until_after_body = @run_loop.defer
+
+      puts [:sdsdsdsdsd, defer_until_after_body].inspect
+
+      # One chunk of the body
+      http_parser.on_body = proc do |chunk|
+        puts "!#!@#!@#!@#"
+        #@run_loop.log(:info, :rack_http_on_body, [http_parser.headers])
+        #string_io << chunk
+      end
 
       # HTTP headers available
       http_parser.on_headers_complete = proc do
@@ -108,16 +135,13 @@ module Bespoked
         path_info = url.path
 
         #@run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
-      end
 
-      # One chunk of the body
-      http_parser.on_body = proc do |chunk|
-        #@run_loop.log(:info, :rack_http_on_body, [http_parser.headers])
-        string_io << chunk
-      end
+#      end
+#      # Headers and body is all parsed
+#      http_parser.on_message_complete = proc do |env|
 
-      # Headers and body is all parsed
-      http_parser.on_message_complete = proc do |env|
+        puts :wtf2222222
+
         #@run_loop.log(:info, :rack_http_on_message_completed, nil)
 
         hijack_wrapper = HijackWrapper.new(string_io, client)
@@ -148,7 +172,7 @@ module Bespoked
           "rack.multithread"  => true,
           "rack.multiprocess" => false,
           "rack.run_once"     => true,
-          "rack.input"        => string_io, #StringIO.new.set_encoding('ASCII-8BIT'),
+          "rack.input"        => hijack_wrapper, #string_io, #StringIO.new.set_encoding('ASCII-8BIT'),
           #"rack.logger"       => $logger,
           "RACK_INPUT"        => ""
         )
@@ -176,60 +200,76 @@ module Bespoked
           env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser.headers[inbh] if  http_parser.headers[inbh]
         end
 
-        status = nil
-        headers = nil
-        body = nil
-        #Thread.new {
-          status, headers, body = @app.call(env)
-        #}.join
+        #@run_loop.work(proc {
 
-        #unless headers["Content-Length"]
-        #  length = 0
-        #  body.each { |b|
-        #    length += b.length
-        #  }
-        #  headers["Content-Length"] = length.to_s
-        #end
+        puts [:foop, defer_until_after_body].inspect
 
-        if headers["Content-Type"] == "text/event-stream"
-          Thread.new do
-          #@run_loop.work(proc {
-            send_headers client, status, headers
-            send_body client, body
-          #})
+        defer_until_after_body.promise.progress do |cheese|
+          puts [:cheese, :resolved].inspect
+
+          status = nil
+          headers = nil
+          body = nil
+          Thread.new {
+            status, headers, body = @app.call(env)
+          }.join
+
+          if headers["Content-Type"] == "text/event-stream"
+            Thread.new do
+            #@run_loop.work(proc {
+              send_headers client, status, headers
+              send_body client, body
+            #})
+            end
+          else
+            unless headers["Content-Length"]
+              length = 0
+              body.each { |b|
+                length += b.length
+              }
+              headers["Content-Length"] = length.to_s
+            end
+
+            send_headers client, status, headers, true
+            send_body client, body, true
           end
-        else
-          send_headers client, status, headers
-          send_body client, body
         end
+
+        :stop
       end
 
       ##################
 
       client.progress do |chunk|
-        http_parser << chunk
+        #http_parser << chunk
+
+        offset_of_body_left_in_buffer = http_parser << chunk
+        body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
+        puts [:cheese, defer_until_after_body, body_left_over].inspect
+        string_io << (body_left_over)
+        string_io.rewind
+        defer_until_after_body.notify(true)
       end
 
       client.start_read
 
-      #})
       #end
     end
 
-    def send_headers(client, status, headers)
-      client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n", {:wait => false}
+    def send_headers(client, status, headers, wait = false)
+      client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n", {:wait => wait}
       headers.each { |k, vs|
         vs.split("\n").each { |v|
           out = "#{k}: #{v}\r\n"
-          client.write out, {:wait => false}
+          client.write out, {:wait => wait}
         }
       }
-      client.write "\r\n"
+      client.write "\r\n", {:wait => wait}
     end
 
-    def send_body(client, body)
+    def send_body(client, body, wait = false)
       body.each { |part|
-        client.write part, {:wait => false}
+        client.write part, {:wait => wait}
       }
     end
   end
