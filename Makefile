@@ -18,7 +18,7 @@ all: $(BUILD)/$(IMAGE_TAG) install
 
 image:
 	docker build -f Dockerfile.bespoked -t $(IMAGE) .
-	docker push $(IMAGE)
+	#docker push $(IMAGE)
 
 $(BUILD)/$(IMAGE_TAG): image
 	touch $(BUILD)/$(IMAGE_TAG)
