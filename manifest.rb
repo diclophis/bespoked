@@ -4,7 +4,7 @@ require 'yaml'
 require 'psych'
 require 'uri'
 
-registry_domain = (ARGV[0] && (ARGV[0] + "/")) || raise
+registry_domain = (ARGV[0] && (ARGV[0])) || raise
 image_name = ARGV[1] || raise
 image_tag = ARGV[2] || raise
 

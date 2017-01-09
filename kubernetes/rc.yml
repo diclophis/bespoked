@@ -8,7 +8,7 @@ spec:
   # The default backend must be of type NodePort.
   type: NodePort
   ports:
-  - nodePort: 80
+  - nodePort: 30001
     port: 8888
     targetPort: 8888
     protocol: TCP
@@ -72,11 +72,9 @@ spec:
     spec:
       terminationGracePeriodSeconds: 600
       serviceAccount: default
-      imagePullSecrets:
-        - name: dockercfgjson
       containers:
       - image: #NOTE: this is re-written via manifest.rb
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         env:
         - name: HTTP_EXAMPLE_X_FORWARDED_PROTO
           value: "https"
