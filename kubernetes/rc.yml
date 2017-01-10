@@ -86,5 +86,4 @@ spec:
           requests:
             cpu: 100m
             memory: 50Mi
-        command: ["sleep", "9999"]
-        #["bundle", "exec", "ruby", "main.rb"]
+        command: ["bundle", "exec", "ruby", "main.rb"]

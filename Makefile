@@ -1,7 +1,7 @@
 # Makefile for besoked installation
 
 #NOTE: override these at execution time
-REPO ?= docker.io/
+REPO ?= localhost/
 IMAGE_NAME ?= bespoked
 IMAGE_TAG ?= $(strip $(shell find Gemfile Gemfile.lock lib config nginx kubernetes main.rb -type f | xargs shasum | sort | shasum | cut -f1 -d" "))
 IMAGE = $(REPO)$(IMAGE_NAME):$(IMAGE_TAG)

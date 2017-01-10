@@ -1,12 +1,11 @@
 FROM alpine:3.4
-RUN apk update && apk upgrade && apk add openssl openssl-dev build-base ruby ruby-dev ruby-irb ruby-bundler
-RUN apk update && apk upgrade && apk add nginx
+RUN touch /tmp/cache-lineage-0001
+RUN apk update && apk upgrade && apk add openssl openssl-dev build-base ruby ruby-dev ruby-irb ruby-bundler nginx libffi-dev libuv libuv-dev git python
 RUN adduser -D -h /home/bespoked -s /bin/bash bespoked
-RUN apk update && apk upgrade && apk add libffi-dev libuv libuv-dev git python
 ADD Gemfile* bespoked.gemspec /home/bespoked/
-WORKDIR /home/bespoked
 RUN chown -R bespoked. /home/bespoked
+WORKDIR /home/bespoked
 USER bespoked
-RUN bundle check --path=vendor/bundle || bundle --path=vendor/bundle --jobs=4 --retry=3 --deployment
+RUN bundle install --force --path=vendor/bundle --jobs=4 --retry=3 --deployment
 ADD . /home/bespoked
 CMD ["bundle", "exec" "ruby", "/home/bespoked/main.rb"]
