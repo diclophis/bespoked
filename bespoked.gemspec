@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = 'bespoked'
-  s.version     = '0.0.1'
+  s.version     = '0.1.0'
   s.date        = '2016-12-01'
   s.summary     = "kubernetes ingress controller w/ generic rack server support"
   s.description = "simple rack based ruby http proxy"
