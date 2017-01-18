@@ -120,6 +120,8 @@ module Bespoked
           #Thread.new {
         #@run_loop.log(:debug, :http_rack_headers, http_parser.headers)
 
+        http_parser_http_version = http_parser.http_version || ["1", "1"]
+        http_parser_http_method = http_parser.http_method || "GET"
         http_parser_headers = http_parser.headers || {}
 
         puts [http_parser, http_parser_headers, string_io].inspect
@@ -176,7 +178,7 @@ module Bespoked
           #proc { |*env| puts "#{env}wtf!!!!!!!!!!!!!"; hijack_wrapper },
           #'rack.hijack_io'    => hijack_wrapper,
 
-          'HTTP_VERSION'      => "HTTP/#{http_parser.http_version.join(".")}",
+          'HTTP_VERSION'      => "HTTP/#{http_parser_http_version.join(".")}",
           "rack.errors"       => $stdout,
           "rack.version"      => ::Rack::VERSION.to_s.split("."),
           "rack.multithread"  => true,
@@ -192,7 +194,7 @@ module Bespoked
 
         #env['HTTP_VERSION'] ||= env['SERVER_PROTOCOL']
         env['QUERY_STRING'] ||= query_string || ""
-        env['REQUEST_METHOD'] = http_parser.http_method
+        env['REQUEST_METHOD'] = http_parser_http_method
 
         env['PATH_INFO'] = path_info #http_parser.request_url
         env['SCRIPT_NAME'] = "" #path_info #== "/" ? "" : path_info #http_parser.request_url
