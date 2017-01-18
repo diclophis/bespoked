@@ -1,6 +1,8 @@
 FROM alpine:3.4
-RUN touch /tmp/cache-lineage-0001
 RUN apk update && apk upgrade && apk add openssl openssl-dev build-base ruby ruby-dev ruby-irb ruby-bundler nginx libffi-dev libuv libuv-dev git python
+RUN touch /tmp/000
+RUN gem install bundler -v 1.13.6 --no-rdoc --no-document
+RUN rm -Rf /home/bespoked
 RUN adduser -D -h /home/bespoked -s /bin/bash bespoked
 ADD Gemfile* bespoked.gemspec /home/bespoked/
 RUN chown -R bespoked. /home/bespoked

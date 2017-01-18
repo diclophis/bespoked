@@ -11,7 +11,7 @@ GIT
 PATH
   remote: .
   specs:
-    bespoked (0.0.1)
+    bespoked (0.1.0)
       http_parser.rb
       libuv
       rack
