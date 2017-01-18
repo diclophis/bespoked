@@ -135,12 +135,22 @@ module Bespoked
         host_header = (http_parser_headers["host"] || http_parser_headers["Host"])
         forwarded_scheme = (http_parser_headers["X-Forwarded-Proto"] || "http")
 
-        url = URI.parse("#{forwarded_scheme}://" + host_header + http_parser.request_url)
-        host = url.host
-        port = url.port
+        url = URI.parse("")
+        host = ""
+        port = 0
+        query_string = ""
+        path_info = ""
+        scheme = forwarded_scheme
 
-        query_string = url.query
-        path_info = url.path
+        if host_header
+          url = URI.parse("#{forwarded_scheme}://" + host_header + http_parser.request_url)
+          scheme = url.scheme
+          host = url.host
+          port = url.port
+
+          query_string = url.query
+          path_info = url.path
+        end
 
         #@run_loop.log(:info, :rack_http_on_message_completed, nil)
 
@@ -158,7 +168,7 @@ module Bespoked
           #'RACK_RUNONCE'      => "false",
 
           #'RACK_URL_SCHEME'   => "https",
-          'rack.url_scheme'   => url.scheme,
+          'rack.url_scheme'   => scheme,
 
           'rack.hijack?'      => true,
           'rack.hijack'       => hijack_wrapper,
