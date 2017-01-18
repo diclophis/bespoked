@@ -120,7 +120,9 @@ module Bespoked
           #Thread.new {
         #@run_loop.log(:debug, :http_rack_headers, http_parser.headers)
 
-        puts [http_parser, http_parser.headers, string_io].inspect
+        http_parser_headers = http_parser.headers || {}
+
+        puts [http_parser, http_parser_headers, string_io].inspect
 
       url = nil
       host = nil
@@ -130,8 +132,8 @@ module Bespoked
       query_string = nil
       path_info = nil
 
-        host_header = (http_parser.headers["host"] || http_parser.headers["Host"])
-        forwarded_scheme = (http_parser.headers["X-Forwarded-Proto"] || "http")
+        host_header = (http_parser_headers["host"] || http_parser_headers["Host"])
+        forwarded_scheme = (http_parser_headers["X-Forwarded-Proto"] || "http")
 
         url = URI.parse("#{forwarded_scheme}://" + host_header + http_parser.request_url)
         host = url.host
@@ -139,14 +141,6 @@ module Bespoked
 
         query_string = url.query
         path_info = url.path
-
-        #@run_loop.log(:warn, :rack_http_on_headers_complete, [http_parser.http_method, http_parser.request_url, host, port])
-
-#      end
-#      # Headers and body is all parsed
-#      http_parser.on_message_complete = proc do |env|
-
-        puts :wtf2222222
 
         #@run_loop.log(:info, :rack_http_on_message_completed, nil)
 
@@ -197,19 +191,18 @@ module Bespoked
         env["SERVER_NAME"] = host #(http_parser.headers["host"] || http_parser.headers["Host"])
         env["SERVER_PORT"] = port.to_s
 
-        env["HTTP_COOKIE"] = http_parser.headers["Cookie"] || ""
-        env["CONTENT_TYPE"] = http_parser.headers["Content-Type"] || ""
-        env["CONTENT_LENGTH"] = http_parser.headers["Content-Length"] || "0"
-        env["HTTP_ACCEPT"] = http_parser.headers["Accept"] || "0"
+        env["HTTP_COOKIE"] = http_parser_headers["Cookie"] || ""
+        env["CONTENT_TYPE"] = http_parser_headers["Content-Type"] || ""
+        env["CONTENT_LENGTH"] = http_parser_headers["Content-Length"] || "0"
+        env["HTTP_ACCEPT"] = http_parser_headers["Accept"] || "0"
 
         ["Accept-Language", "Accept-Encoding", "Connection", "Upgrade-Insecure-Requests"].each do |inbh|
-          env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser.headers[inbh] if  http_parser.headers[inbh]
+          env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser_headers[inbh] if  http_parser_headers[inbh]
         end
 
         #@run_loop.work(proc {
 
         puts [:foop, defer_until_after_body].inspect
-
 
 
           puts [:cheese, :resolved].inspect
