@@ -81,9 +81,9 @@ spec:
         name: bespoked-controller
         resources:
           limits:
-            cpu: 100m
+            cpu: 1200m
             memory: 200Mi
           requests:
-            cpu: 100m
-            memory: 50Mi
+            cpu: 200m
+            memory: 100Mi
         command: ["bundle", "exec", "ruby", "main.rb"]

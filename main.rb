@@ -18,7 +18,7 @@ run_loop.run do |exception_handler|
   end
 
   exception_handler.notifier do |error, message, trace|
-    logger.notify({:date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})
+    logger.notify({:lineno => :main, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})
   end
 
   #INIT

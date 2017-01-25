@@ -21,13 +21,13 @@ module Bespoked
             "spec": {
                 "rules": [
                     {
-                        "host": "localhost",
+                        "host": "127.0.0.1",
                         "http": {
                             "paths": [
                                 {
                                     "backend": {
-                                        "serviceName": "localhost",
-                                        "servicePort": 3100
+                                        "serviceName": "10.0.0.95",
+                                        "servicePort": 9090
                                     }
                                 }
                             ]
@@ -46,7 +46,7 @@ module Bespoked
             "kind": "Service",
             "apiVersion": "v1",
             "metadata": {
-                "name": "localhost",
+                "name": "10.0.0.95",
                 "resourceVersion": "20289",
                 "labels": {
                     "ttl": "24"
@@ -58,14 +58,14 @@ module Bespoked
                 "ports": [
                     {   
                         "protocol": "TCP",
-                        "port": 3100,
-                        "targetPort": 3100
+                        "port": 9090,
+                        "targetPort": 9090
                     }
                 ],
                 "selector": {
-                    "name": "localhost"
+                    "name": "10.0.0.95"
                 },
-                "clusterIP": "127.0.0.1",
+                "clusterIP": "10.0.0.95",
                 "type": "ClusterIP",
                 "sessionAffinity": "None"
             },

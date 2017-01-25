@@ -18,7 +18,7 @@ module Bespoked
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       @server.catch do |reason|
-        puts reason.inspect
+        record :info, :libuv_http_proxy_server_catch, [reason].inspect
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
@@ -27,7 +27,7 @@ module Bespoked
     end
 
     def start
-      @server.listen(1024)
+      @server.listen(1024 * 32)
     end
 
     def shutdown
@@ -43,7 +43,7 @@ module Bespoked
     end
 
     def handle_client(client)
-      record :info, :start_handle_client, [client].inspect
+      #record :info, :start_handle_client, [client].inspect
 
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
@@ -57,9 +57,9 @@ module Bespoked
       end
 
       http_parser.on_headers_complete = proc do
-        record :info, :headers, [http_parser.headers].inspect
+        #record :info, :headers, [http_parser.headers].inspect
         #sleep 60
-        record :info, :gogogo, [].inspect
+        #record :info, :gogogo, [].inspect
 
         reading_state = :request_to_upstream
 
@@ -73,7 +73,7 @@ module Bespoked
             out_url = URI.parse("http://" + mapped_host_port)
           end
 
-          record :info, :in_out_url, [in_url, out_url].inspect
+          #record :info, :in_out_url, [in_url, out_url].inspect
 
           #TODO
           if url = out_url
@@ -81,7 +81,7 @@ module Bespoked
             port = url.port
 
             on_dns_bad = proc { |err|
-              record :info, :bad_dns, [err, err.class].inspect
+              #record :info, :bad_dns, [err, err.class].inspect
 
               client.shutdown
             }
@@ -89,13 +89,16 @@ module Bespoked
             on_dns_ok = proc { |addrinfo|
               ip_address = addrinfo[0][0]
 
-              record :info, :dns_ok, [host, ip_address, port.to_i, client.sockname, client.peername].inspect 
+              #record :info, :dns_ok, [host, ip_address, port.to_i, client.sockname, client.peername].inspect
 
               new_client.progress do |chunk|
                 #record :info, :got_response_from_upstream, [chunk].inspect
                 if client && chunk && chunk.length > 0
-                  record :info, :got_response_from_upstream, [chunk].inspect
-                  client.write(chunk, {:wait => true})
+                  #record :info, :got_response_from_upstream, [chunk].inspect
+                  client.write(chunk, {:wait => :promise}).then { |a|
+                  }.catch { |e|
+                    record :info, :proxy_write_error, [e].inspect
+                  }
                 end
               end
 
@@ -121,38 +124,57 @@ module Bespoked
 
                 headers_for_upstream_request = http_parser.headers.merge(proxy_override_headers)
 
+                request_to_upstream = String.new
+
                 headers_for_upstream_request.each { |k, vs|
                   vs.split("\n").each { |v|
                     if k && v
-                      new_client.write "#{k}: #{v}\r\n", {:wait => true}
+                      chunk = "#{k}: #{v}\r\n"
+                      request_to_upstream.concat(chunk)
                     end
                   }
                 }
 
-                new_client.write("\r\n", {:wait =>  true})
+                request_to_upstream.concat("\r\n")
+
                 if http_parser.upgrade_data && http_parser.upgrade_data.length > 0
-                  new_client.write(http_parser.upgrade_data, {:wait => true})
+                  request_to_upstream.concat(http_parser.upgrade_data)
                 end
+
                 http_parser.reset!
                 http_parser = nil
 
                 if body_left_over && body_left_over.length > 0
-                  new_client.write(body_left_over, {:wait => true})
+                  request_to_upstream.concat(body_left_over)
                 end
 
-                new_client.start_read
+                new_client.write(request_to_upstream, {:wait =>  :promise}).then { |b|
+                  new_client.start_read
+                }.catch { |e|
+                  record :info, :wrote_b_catch, [e].inspect
+                  #new_client.shutdown
+                  #client.shutdown
+                  client.write("HTTP/1.1 500 Error\r\nContent-Length: 0\r\n\r\n", {:wait => :promise}).then { |a|
+                    record :info, :wrote_c, [a].inspect
+                    client.close
+                  }.catch { |e|
+                    record :info, :wrote_c_catch, [e].inspect
+                    client.close
+                  }
+                }
               end
             }
 
-            run_loop.lookup(host, {:wait => false}).then(on_dns_ok, on_dns_bad)
+            #def lookup(hostname, hint = :IPv4, port = 9, wait: true, &block)
+            run_loop.lookup(host, :IPv4, 59, :wait => false).then(on_dns_ok, on_dns_bad)
             :stop
           else
-            record :info, :halted_lack_of_something, [].inspect
+            #record :info, :halted_lack_of_something, [].inspect
             client.shutdown
             :stop
           end
         else
-          record :info, :halted_lack_of_http_host, [].inspect
+          #record :info, :halted_lack_of_http_host, [].inspect
           client.shutdown
           :stop
         end
@@ -175,7 +197,7 @@ module Bespoked
         end
       end
 
-      record :info, :start_read_handle_client, [client, http_parser].inspect
+      #record :info, :start_read_handle_client, [client, http_parser].inspect
 
       client.start_read
     end
