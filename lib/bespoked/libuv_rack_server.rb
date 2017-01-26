@@ -288,7 +288,12 @@ module Bespoked
 
     def send_body(client, body, wait = false)
       body.each { |part|
-        client.write part, {:wait => wait}
+        if part
+          unless part.is_a?(String)
+            part = part.to_s
+          end
+          client.write part, {:wait => wait}
+        end
       }
     end
   end
