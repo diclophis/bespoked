@@ -13,15 +13,15 @@ module Bespoked
     end
 
     def gets
-      read = @reader.read
-      puts [:gets, read].inspect
-      read
+      rad = read
+      puts [:gets, rad].inspect
+      rad
     end
 
     def each
-      read = @reader.read
-      puts [:each, read].inspect
-      yield @reader.read
+      rad = read
+      puts [:each, rad].inspect
+      yield rad
     end
 
     def rewind
@@ -29,9 +29,9 @@ module Bespoked
     end
 
     def read(length = nil)
-      read = @reader.read
-      puts [:van_read, length, read].inspect
-      read
+      rad = @reader.read(length)
+      puts [:van_rad, length, rad].inspect
+      rad
     end
     
     def write(chunk)

@@ -43,7 +43,7 @@ module Bespoked
     end
 
     def handle_client(client)
-      #record :info, :start_handle_client, [client].inspect
+      record :info, :start_handle_client, [client].inspect
 
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
