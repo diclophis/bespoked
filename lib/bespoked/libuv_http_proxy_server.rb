@@ -56,6 +56,11 @@ module Bespoked
         client.close
       end
 
+      new_client.finally do |err|
+        record :info, :upstream_server_closed, [err, err.class].inspect
+        client.close
+      end
+
       http_parser.on_headers_complete = proc do
         #record :info, :headers, [http_parser.headers].inspect
         #sleep 60
