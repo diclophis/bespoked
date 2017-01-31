@@ -147,7 +147,7 @@ module Bespoked
 
             'RACK_VERSION'      => ::Rack::VERSION.to_s,
             'RACK_ERRORS'       => "",
-            "RACK_INPUT"        => ""
+            "RACK_INPUT"        => "",
 
             'rack.url_scheme'   => scheme,
             'rack.hijack?'      => true,
