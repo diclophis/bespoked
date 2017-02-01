@@ -1,4 +1,12 @@
 GIT
+  remote: https://github.com/diclophis/syncretizer.git
+  revision: 4e88c46fbe89e732c50f1192a16a665d2f9298c6
+  branch: master
+  specs:
+    syncretizer (0.0.1)
+      hana
+
+GIT
   remote: https://github.com/mavenlink/libuv.git
   revision: 722fdfe48ce462cb3fbecc99b9195b0b0935c6a9
   branch: with-upstream-master
@@ -25,6 +33,7 @@ GEM
     ffi-compiler (1.0.1)
       ffi (>= 1.0.0)
       rake
+    hana (1.3.2)
     http_parser.rb (0.6.0)
     minitest (5.7.0)
     rack (1.6.4)
@@ -42,6 +51,7 @@ DEPENDENCIES
   bespoked!
   libuv!
   minitest (= 5.7.0)
+  syncretizer!
 
 BUNDLED WITH
    1.13.6
