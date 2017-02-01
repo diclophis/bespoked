@@ -43,7 +43,7 @@ module Bespoked
     end
 
     def handle_client(client)
-      record :info, :start_handle_client, [client].inspect
+      # record :debug, :start_handle_client, [client].inspect
 
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
@@ -52,54 +52,41 @@ module Bespoked
       new_client = run_loop.tcp
 
       new_client.catch do |err|
-        record :info, :rack_proxy_client_error, [err, err.class].inspect
-        client.close
+        halt_connection(client, 500, :proxy_client_error)
       end
 
       new_client.finally do |err|
-        record :info, :upstream_server_closed, [err, err.class].inspect
+        # record :debug, :upstream_server_closed, [err, err.class].inspect
         client.close
       end
 
       http_parser.on_headers_complete = proc do
-        #record :info, :headers, [http_parser.headers].inspect
-        #sleep 60
-        #record :info, :gogogo, [].inspect
-
         reading_state = :request_to_upstream
 
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
 
         if env["HTTP_HOST"]
           in_url = URI.parse("http://" + env["HTTP_HOST"])
-          out_url = nil
+          url = nil
 
           if mapped_host_port = @proxy_controller.vhosts[in_url.host]
-            out_url = URI.parse("http://" + mapped_host_port)
+            url = URI.parse("http://" + mapped_host_port)
           end
 
-          #record :info, :in_out_url, [in_url, out_url].inspect
-
-          #TODO
-          if url = out_url
+          #TODO: make this not a super-nested proc somehow
+          if url
             host = url.host
             port = url.port
 
             on_dns_bad = proc { |err|
-              #record :info, :bad_dns, [err, err.class].inspect
-
-              client.shutdown
+              halt_connection(client, 404, :bad_dns)
             }
 
             on_dns_ok = proc { |addrinfo|
               ip_address = addrinfo[0][0]
 
-              #record :info, :dns_ok, [host, ip_address, port.to_i, client.sockname, client.peername].inspect
-
               new_client.progress do |chunk|
-                #record :info, :got_response_from_upstream, [chunk].inspect
                 if client && chunk && chunk.length > 0
-                  #record :info, :got_response_from_upstream, [chunk].inspect
                   client.write(chunk, {:wait => :promise}).then { |a|
                   }.catch { |e|
                     record :info, :proxy_write_error, [e].inspect
@@ -108,9 +95,7 @@ module Bespoked
               end
 
               new_client.connect(ip_address, port.to_i) do
-
                 upstream_handshake = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
-                #record :info, :handshare_up, [upstream_handshake].inspect
                 new_client.write(upstream_handshake, wait: true)
 
                 #NOTE: these header overrides are based on security recommendations
@@ -156,32 +141,19 @@ module Bespoked
                 new_client.write(request_to_upstream, {:wait =>  :promise}).then { |b|
                   new_client.start_read
                 }.catch { |e|
-                  record :info, :wrote_b_catch, [e].inspect
-                  #new_client.shutdown
-                  #client.shutdown
-                  client.write("HTTP/1.1 500 Error\r\nContent-Length: 0\r\n\r\n", {:wait => :promise}).then { |a|
-                    record :info, :wrote_c, [a].inspect
-                    client.close
-                  }.catch { |e|
-                    record :info, :wrote_c_catch, [e].inspect
-                    client.close
-                  }
+                  halt_connection(client, 500, :halted_upstream_closed)
                 }
               end
             }
 
-            #def lookup(hostname, hint = :IPv4, port = 9, wait: true, &block)
             run_loop.lookup(host, :IPv4, 59, :wait => false).then(on_dns_ok, on_dns_bad)
+
             :stop
           else
-            #record :info, :halted_lack_of_something, [].inspect
-            client.shutdown
-            :stop
+            halt_connection(client, 404, :halted_lack_of_matching_service)
           end
         else
-          #record :info, :halted_lack_of_http_host, [].inspect
-          client.shutdown
-          :stop
+          halt_connection(client, 404, :halted_lack_of_http_host)
         end
       end
 
@@ -202,9 +174,20 @@ module Bespoked
         end
       end
 
-      #record :info, :start_read_handle_client, [client, http_parser].inspect
-
       client.start_read
+    end
+
+    def halt_connection(client, status, reason)
+      # record :debug, :halt_connection, [reason].inspect
+      response = reason.to_s
+      client.write("HTTP/1.1 #{status} Halted\r\nConnection: close\r\nContent-Length: #{response.length}\r\n\r\n#{response}", {:wait => :promise}).then {
+        # record :debug, :wrote_halted
+        client.close
+      }.catch { |e|
+        record :info, :wrote_halted_catch, [e].inspect
+        client.close
+      }
+      :stop
     end
   end
 end
