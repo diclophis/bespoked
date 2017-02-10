@@ -15,6 +15,7 @@ module Bespoked
       options[:BindAddress] ||= DEFAULT_LIBUV_SOCKET_BIND
       options[:Port] ||= DEFAULT_LIBUV_HTTP_PROXY_PORT
 
+      record :debug, :http_proxy_server_listen, [options].inspect
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       @server.catch do |reason|
@@ -68,6 +69,21 @@ module Bespoked
         client.close
       end
 
+      client.progress do |chunk|
+        if reading_state == :request_to_upstream
+          if new_client && chunk && chunk.length > 0
+            new_client.write(chunk)
+          end
+        end
+
+        if http_parser && reading_state == :request_to_proxy
+          if chunk && chunk.length > 0
+            offset_of_body_left_in_buffer = http_parser << chunk
+            body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
+          end
+        end
+      end
+
       http_parser.on_headers_complete = proc do
         reading_state = :request_to_upstream
 
@@ -92,7 +108,7 @@ module Bespoked
 
             on_dns_ok = proc { |addrinfo|
               ip_address = addrinfo[0][0]
-              do_new_thing(host, port, http_parser, client, new_client, ip_address)
+              do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
             }
 
             run_loop.lookup(host, :IPv4, 59, :wait => false).then(on_dns_ok, on_dns_bad)
@@ -108,20 +124,6 @@ module Bespoked
 
       ##################
 
-      client.progress do |chunk|
-        if reading_state == :request_to_upstream
-          if new_client && chunk && chunk.length > 0
-            new_client.write(chunk)
-          end
-        end
-
-        if http_parser && reading_state == :request_to_proxy
-          if chunk && chunk.length > 0
-            offset_of_body_left_in_buffer = http_parser << chunk
-            body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
-          end
-        end
-      end
 
       client.start_read
     end
@@ -130,6 +132,9 @@ module Bespoked
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a| }.catch { |e|
           record :info, :proxy_write_error, [e].inspect
+          if e.is_a?(Libuv::Error::ECANCELED)
+            client.close
+          end
         }
       end
     end
@@ -159,9 +164,10 @@ module Bespoked
       http_parser.headers.merge(proxy_override_headers)
     end
 
-    def dourt(http_parser)
+    def dourt(http_parser, client, body_left_over)
       request_to_upstream = String.new
 
+      headers_for_upstream_request = header_stack(http_parser, client)
       headers_for_upstream_request.each { |k, vs|
         vs.split("\n").each { |v|
           if k && v
@@ -184,33 +190,31 @@ module Bespoked
         request_to_upstream.concat(body_left_over)
       end
 
+      record :debug, :headers_for_upstream_request, [headers_for_upstream_request].inspect
+
       request_to_upstream
     end
 
     #TODO: pass ENV somehow
-    def other_thang(http_parser, new_client, client)
+    def other_twang(http_parser, new_client, client, body_left_over)
       upstream_handshake = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
       #TODO: refactor
       new_client.write(upstream_handshake, wait: true)
 
-      headers_for_upstream_request = proxy_override_headers(http_parser, client)
-
-      record :debug, :headers_for_upstream_request, [headers_for_upstream_request].inspect
-
-      request_to_upstream = dourt(http_parser)
+      request_to_upstream = dourt(http_parser, client, body_left_over)
 
       #foop
       new_client.start_read
       thang(new_client, request_to_upstream)
     end
 
-    def do_new_thing(host, port, http_parser, client, new_client, ip_address)
+    def do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
       new_client.progress(&proc { |chunk|
-        thang(client, chunk)
+        thang(client, chunk) unless client.closed?
       })
 
       new_client.connect(ip_address, port.to_i, &proc {
-        other_thang(http_parser, new_client, client)
+        other_twang(http_parser, new_client, client, body_left_over)
       })
     end
 

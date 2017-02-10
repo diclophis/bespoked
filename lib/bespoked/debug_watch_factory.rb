@@ -2,6 +2,7 @@
 
 module Bespoked
   class DebugWatchFactory < WatchFactory
+    UPSTREAM_HOST = "127.0.0.1"
     DEBUG_JSON_STREAM =
     [
       {
@@ -26,7 +27,7 @@ module Bespoked
                             "paths": [
                                 {
                                     "backend": {
-                                        "serviceName": "10.0.0.95",
+                                        "serviceName": UPSTREAM_HOST,
                                         "servicePort": 9090
                                     }
                                 }
@@ -46,7 +47,7 @@ module Bespoked
             "kind": "Service",
             "apiVersion": "v1",
             "metadata": {
-                "name": "10.0.0.95",
+                "name": UPSTREAM_HOST,
                 "resourceVersion": "20289",
                 "labels": {
                     "ttl": "24"
@@ -63,9 +64,9 @@ module Bespoked
                     }
                 ],
                 "selector": {
-                    "name": "10.0.0.95"
+                    "name": UPSTREAM_HOST
                 },
-                "clusterIP": "10.0.0.95",
+                "clusterIP": UPSTREAM_HOST,
                 "type": "ClusterIP",
                 "sessionAffinity": "None"
             },
