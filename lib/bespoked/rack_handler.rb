@@ -27,7 +27,7 @@ module Bespoked
         foo_bar.start
 
         exception_handler.notifier do |error, message, trace|
-          logger.notify({:lineno => :rack_handler, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})
+          logger.notify({:lineno => :rack_handler, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => (message || "") + (error.respond_to?(:message) ? error.message : ""), :trace => trace || error.to_s})
         end
       end
     end
