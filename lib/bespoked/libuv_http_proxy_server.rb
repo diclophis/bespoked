@@ -22,6 +22,14 @@ module Bespoked
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
+        #tls_options = {
+        #  :server => true,
+        #  :verify_peer => true,
+        #  :private_key => 'private_key.pem',
+        #  :cert_chain => 'cert_chain.crt'
+        #}
+        #client.start_tls(tls_options)
+
         handle_client(client)
       end
     end
@@ -84,66 +92,7 @@ module Bespoked
 
             on_dns_ok = proc { |addrinfo|
               ip_address = addrinfo[0][0]
-
-              new_client.progress do |chunk|
-                if client && chunk && chunk.length > 0
-                  client.write(chunk, {:wait => :promise}).then { |a|
-                  }.catch { |e|
-                    record :info, :proxy_write_error, [e].inspect
-                  }
-                end
-              end
-
-              new_client.connect(ip_address, port.to_i) do
-                upstream_handshake = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
-                new_client.write(upstream_handshake, wait: true)
-
-                #NOTE: these header overrides are based on security recommendations
-                proxy_override_headers = {
-                  "X-Forwarded-For" => client.peername[1] || "", # NOTE: makes the actual IP available
-                  "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
-                  "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning... double check this
-                  "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
-                }
-
-                proxy_override_headers = ENV.select { |possible_header|
-                  "HTTP" == possible_header.slice(0, 4)
-                }.map { |k, v|
-                  [k.split("_").map { |header| header.downcase.capitalize }.join("-"), v]
-                }.to_h
-
-                headers_for_upstream_request = http_parser.headers.merge(proxy_override_headers)
-
-                request_to_upstream = String.new
-
-                headers_for_upstream_request.each { |k, vs|
-                  vs.split("\n").each { |v|
-                    if k && v
-                      chunk = "#{k}: #{v}\r\n"
-                      request_to_upstream.concat(chunk)
-                    end
-                  }
-                }
-
-                request_to_upstream.concat("\r\n")
-
-                if http_parser.upgrade_data && http_parser.upgrade_data.length > 0
-                  request_to_upstream.concat(http_parser.upgrade_data)
-                end
-
-                http_parser.reset!
-                http_parser = nil
-
-                if body_left_over && body_left_over.length > 0
-                  request_to_upstream.concat(body_left_over)
-                end
-
-                new_client.write(request_to_upstream, {:wait =>  :promise}).then { |b|
-                  new_client.start_read
-                }.catch { |e|
-                  halt_connection(client, 500, :halted_upstream_closed)
-                }
-              end
+              do_new_thing(host, port, http_parser, client, new_client, ip_address)
             }
 
             run_loop.lookup(host, :IPv4, 59, :wait => false).then(on_dns_ok, on_dns_bad)
@@ -175,6 +124,94 @@ module Bespoked
       end
 
       client.start_read
+    end
+
+    def thang(client, chunk)
+      if client && chunk && chunk.length > 0
+        client.write(chunk, {:wait => :promise}).then { |a| }.catch { |e|
+          record :info, :proxy_write_error, [e].inspect
+        }
+      end
+    end
+
+#foop    def (
+#      new_client.write(request_to_upstream, {:wait =>  :promise}).then { |b|
+#      }.catch { |e|
+#        halt_connection(client, 500, :halted_upstream_closed)
+#      }
+
+    #TODO: merge with
+    def header_stack(http_parser, client)
+      #NOTE: these header overrides are based on security recommendations
+      proxy_override_headers = {
+        "X-Forwarded-For" => client.peername[1] || "", # NOTE: makes the actual IP available
+        "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
+        "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning... double check this
+        "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
+      }
+
+      proxy_override_headers = ENV.select { |possible_header|
+        "HTTP" == possible_header.slice(0, 4)
+      }.map { |k, v|
+        [k.slice(5, (k.length - 5)).split("_").map { |header| header.downcase.capitalize }.join("-"), v]
+      }.to_h
+
+      http_parser.headers.merge(proxy_override_headers)
+    end
+
+    def dourt(http_parser)
+      request_to_upstream = String.new
+
+      headers_for_upstream_request.each { |k, vs|
+        vs.split("\n").each { |v|
+          if k && v
+            chunk = "#{k}: #{v}\r\n"
+            request_to_upstream.concat(chunk)
+          end
+        }
+      }
+
+      request_to_upstream.concat("\r\n")
+
+      if http_parser.upgrade_data && http_parser.upgrade_data.length > 0
+        request_to_upstream.concat(http_parser.upgrade_data)
+      end
+
+      http_parser.reset!
+      http_parser = nil
+
+      if body_left_over && body_left_over.length > 0
+        request_to_upstream.concat(body_left_over)
+      end
+
+      request_to_upstream
+    end
+
+    #TODO: pass ENV somehow
+    def other_thang(http_parser, new_client, client)
+      upstream_handshake = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
+      #TODO: refactor
+      new_client.write(upstream_handshake, wait: true)
+
+      headers_for_upstream_request = proxy_override_headers(http_parser, client)
+
+      record :debug, :headers_for_upstream_request, [headers_for_upstream_request].inspect
+
+      request_to_upstream = dourt(http_parser)
+
+      #foop
+      new_client.start_read
+      thang(new_client, request_to_upstream)
+    end
+
+    def do_new_thing(host, port, http_parser, client, new_client, ip_address)
+      new_client.progress(&proc { |chunk|
+        thang(client, chunk)
+      })
+
+      new_client.connect(ip_address, port.to_i, &proc {
+        other_thang(http_parser, new_client, client)
+      })
     end
 
     def halt_connection(client, status, reason)
