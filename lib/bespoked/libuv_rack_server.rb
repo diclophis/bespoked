@@ -263,7 +263,8 @@ module Bespoked
     def thang(client, chunk)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a| }.catch { |e|
-          record :info, :proxy_write_error, [e].inspect
+          #TODO: record support
+          #record :info, :proxy_write_error, [e].inspect
           if e.is_a?(Libuv::Error::ECANCELED)
             client.close
           end
