@@ -186,21 +186,14 @@ module Bespoked
 
           if headers["Content-Type"] == "text/event-stream"
             #TODO: figure out threads/co-routines
-            Thread.new do
-              send_headers client, status, headers
-              send_body client, body
+            #Thread.new do
+            #end
+
+            @run_loop.work do
+              crang(nil, client, status, headers, body)
             end
           else
-            unless headers["Content-Length"]
-              length = 0
-              body.each { |b|
-                length += b.length
-              }
-              headers["Content-Length"] = length.to_s
-            end
-
-            send_headers client, status, headers, true
-            send_body client, body, true
+            crang(:alt, client, status, headers, body)
           end
 
           outer_http_parser.reset!
@@ -222,26 +215,61 @@ module Bespoked
       client.start_read
     end
 
+    def crang(alt, client, status, headers, body)
+      if alt == :alt
+        unless headers["Content-Length"]
+          length = 0
+          body.each { |b|
+            length += b.length
+          }
+          headers["Content-Length"] = length.to_s
+        end
+      end
+
+      response = String.new
+
+      response.concat(send_headers(client, status, headers))
+      response.concat(send_body(client, body))
+
+      thang(client, response) unless client.closed?
+    end
+
     def send_headers(client, status, headers, wait = false)
-      client.write "HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n", {:wait => wait}
+      chunk = String.new
+      chunk.concat("HTTP/1.1 #{status} #{WEBrick::HTTPStatus.reason_phrase(status)}\r\n")
       headers.each { |k, vs|
         vs.split("\n").each { |v|
           out = "#{k}: #{v}\r\n"
-          client.write out, {:wait => wait}
+          chunk.concat(out)
         }
       }
-      client.write "\r\n", {:wait => wait}
+      chunk.concat("\r\n")
+      chunk
     end
 
     def send_body(client, body, wait = false)
+      chunk = String.new
       body.each { |part|
         if part
           unless part.is_a?(String)
             part = part.to_s
           end
-          client.write part, {:wait => wait}
+          chunk.concat(part)
         end
       }
+      chunk
     end
+
+    def thang(client, chunk)
+      if client && chunk && chunk.length > 0
+        client.write(chunk, {:wait => :promise}).then { |a| }.catch { |e|
+          record :info, :proxy_write_error, [e].inspect
+          if e.is_a?(Libuv::Error::ECANCELED)
+            client.close
+          end
+        }
+      end
+    end
+
   end
 end

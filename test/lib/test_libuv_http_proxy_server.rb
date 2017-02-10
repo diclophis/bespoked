@@ -40,7 +40,8 @@ HERE
     @mock_upstream_app = proc { |env|
       #@stop_mock_servers_defer.resolve(true)
 
-      [200, {"Content-Type" => "text"}, ["example rack handler"]]
+      #[200, {"Content-Type" => "text"}, ["example rack handler"]]
+      [200, {"Content-Type" => "text/event-stream"}, ["example rack handler"]]
     }
 
     @mock_upstream_server = Bespoked::LibUVRackServer.new(@run_loop, @mock_upstream_app, @mock_upstream_options)
