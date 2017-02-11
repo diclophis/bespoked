@@ -1,72 +1,43 @@
 #
 
 module Bespoked
-  class HijackWrapper
-    def initialize(reader, writer)
-      #TODO: assert this is correct wrapper script
-      @reader = reader
-      @writer = writer
+  class InputIO
+    def initialize(io, client)
+      @io = io
+      @client = client
     end
 
-    def call(*args)
-      self
+    def write
     end
 
     def gets
-      rad = read
+      read
+    end
+
+    def read(*args)
+      rad = @io.read
       rad
     end
 
     def each
-      rad = read
-      yield rad
+			while chunk = fd.read
+				yield chunk
+			end
     end
 
     def rewind
-      @reader.rewind
+      @io.rewind
+    end
+  end
+
+  class HijackWrapper < InputIO
+    def initialize(reader, writer)
+      @reader = reader
+      @writer = writer
     end
 
-    def read(length = nil)
-      rad = @reader.read_nonblock(length)
-      rad || ""
-    end
-    
-    def write(chunk)
-      puts "WEITERRIRIRIRIRIRIRIRIRIRIRI"
-      @writer.write(chunk)
-    end
-
-    def read_nonblock
-      read
-    end
-
-    def write_nonblock(chunk)
-      write(chunk)
-    end
-
-    def flush
-      @writer.flush
-    end
-    
-    def close
-      @writer.close
-    end
-    
-    def close_read
-      close
-    end
-    
-    def close_write
-      close
-    end
-    
-    def closed?
-      @writer.closed?
-    end
-
-    def eof?
-      puts "ASDADASDASD"
-      @reader.eof?
+    def call(args)
+      self
     end
   end
 
@@ -88,7 +59,6 @@ module Bespoked
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
-        puts "NEW CONNECTION"
         defer_until_after_body = @run_loop.defer
         defer_until_after_body.promise.progress do |request_depth|
           handle_client(defer_until_after_body, client, request_depth)
@@ -108,7 +78,7 @@ module Bespoked
     end
 
     def handle_client(retry_defer, client, request_depth)
-      puts request_depth
+      outer_io = StringIO.new
 
       outer_http_parser = Http::Parser.new
       should_parse_http = true
@@ -122,117 +92,105 @@ module Bespoked
       # HTTP headers available
       outer_http_parser.on_headers_complete = proc do
         defer_until_after_body.promise.progress do |string_io|
+          outer_io << string_io
 
-        http_parser_http_version = outer_http_parser.http_version || ["1", "1"]
-        http_parser_http_method = outer_http_parser.http_method || "GET"
-        http_parser_headers = outer_http_parser.headers || {}
-        request_url = outer_http_parser.request_url
+          if should_parse_http
+            http_parser_http_version = outer_http_parser.http_version || ["1", "1"]
+            http_parser_http_method = outer_http_parser.http_method || "GET"
+            http_parser_headers = outer_http_parser.headers || {}
+            request_url = outer_http_parser.request_url
 
-        if http_parser_headers == {}
-          #puts http_parser.inspect
-        end
+            if http_parser_headers == {}
+              #puts http_parser.inspect
+            end
 
-          url = nil
-          host = nil
-          port = nil
-          host_header = nil
-          query_string = nil
-          path_info = nil
+            url = nil
+            host = nil
+            port = nil
+            host_header = nil
+            query_string = nil
+            path_info = nil
 
-          host_header = (http_parser_headers["host"] || http_parser_headers["Host"])
-          forwarded_scheme = (http_parser_headers["X-Forwarded-Proto"] || "http")
+            host_header = (http_parser_headers["host"] || http_parser_headers["Host"])
+            forwarded_scheme = (http_parser_headers["X-Forwarded-Proto"] || "http")
 
-          url = URI.parse("")
-          host = ""
-          port = 0
-          query_string = ""
-          path_info = ""
-          scheme = forwarded_scheme
+            url = URI.parse("")
+            host = ""
+            port = 0
+            query_string = ""
+            path_info = ""
+            scheme = forwarded_scheme
 
-          if host_header
-            url = URI.parse("#{forwarded_scheme}://" + host_header + request_url)
-            scheme = url.scheme
-            host = url.host
-            port = url.port
+            if host_header
+              url = URI.parse("#{forwarded_scheme}://" + host_header + request_url)
+              scheme = url.scheme
+              host = url.host
+              port = url.port
 
-            query_string = url.query
-            path_info = url.path
-          end
+              query_string = url.query
+              path_info = url.path
+            end
 
-          string_io = StringIO.new(string_io) unless string_io.is_a?(StringIO)
-          hijack_wrapper = HijackWrapper.new(string_io, client)
+            #string_io = StringIO.new(string_io) unless string_io.is_a?(StringIO)
+            hijack_wrapper = HijackWrapper.new(outer_io, client)
+            hijack = true
 
-          env = {}
+            input_io = InputIO.new(outer_io, client)
 
-          env.update(
-            'HTTP_VERSION'      => "HTTP/#{http_parser_http_version.join(".")}",
+            env = {}
 
-            'RACK_VERSION'      => ::Rack::VERSION.to_s,
-            'RACK_ERRORS'       => "",
-            "RACK_INPUT"        => "",
+            env.update(
+              'HTTP_VERSION'      => "HTTP/#{http_parser_http_version.join(".")}",
 
-            'rack.url_scheme'   => scheme,
-            'rack.hijack?'      => true,
-            'rack.hijack'       => hijack_wrapper,
-            "rack.errors"       => $stdout,
-            "rack.version"      => ::Rack::VERSION.to_s.split("."),
-            "rack.multithread"  => true,
-            "rack.multiprocess" => false,
-            "rack.run_once"     => true,
-            "rack.input"        => hijack_wrapper
-          )
+              'RACK_VERSION'      => ::Rack::VERSION.to_s,
+              'RACK_ERRORS'       => "",
+              "RACK_INPUT"        => "",
 
-          env['QUERY_STRING'] ||= query_string || ""
-          env['REQUEST_METHOD'] = http_parser_http_method
+              'rack.url_scheme'   => scheme,
+              'rack.hijack?'      => hijack,
+              'rack.hijack'       => hijack_wrapper,
+              "rack.errors"       => $stdout,
+              "rack.version"      => ::Rack::VERSION.to_s.split("."),
+              "rack.multithread"  => false,
+              "rack.multiprocess" => false,
+              "rack.run_once"     => false,
+              "rack.input"        => input_io
+            )
 
-          env['PATH_INFO'] = path_info
-          env['SCRIPT_NAME'] = ""
+            env['QUERY_STRING'] ||= query_string || ""
+            env['REQUEST_METHOD'] = http_parser_http_method
 
-          env["SERVER_NAME"] = host
-          env["SERVER_PORT"] = port.to_s
+            env['PATH_INFO'] = path_info
+            env['SCRIPT_NAME'] = ""
 
-          env["HTTP_COOKIE"] = http_parser_headers["Cookie"] || ""
-          env["CONTENT_TYPE"] = http_parser_headers["Content-Type"] || ""
-          env["CONTENT_LENGTH"] = http_parser_headers["Content-Length"] || "0"
-          env["HTTP_ACCEPT"] = http_parser_headers["Accept"] || "0"
+            env["SERVER_NAME"] = host
+            env["SERVER_PORT"] = port.to_s
 
-          ["Accept-Language", "Accept-Encoding", "Connection", "Upgrade-Insecure-Requests"].each do |inbh|
-            env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser_headers[inbh] if  http_parser_headers[inbh]
-          end
+            env["HTTP_COOKIE"] = http_parser_headers["Cookie"] || ""
+            env["CONTENT_TYPE"] = http_parser_headers["Content-Type"] || ""
+            env["CONTENT_LENGTH"] = http_parser_headers["Content-Length"] || "0"
+            env["HTTP_ACCEPT"] = http_parser_headers["Accept"] || "0"
 
-          #puts http_parser_headers.inspect
-          #puts env.inspect
-          #puts [env['PATH_INFO'], host_header].inspect
+            ["Accept-Language", "Accept-Encoding", "Connection", "Upgrade-Insecure-Requests"].each do |inbh|
+              env["HTTP_" + inbh.upcase.gsub("-", "_")] = http_parser_headers[inbh] if  http_parser_headers[inbh]
+            end
 
-          status = nil
-          headers = nil
-          body = nil
+            status = nil
+            headers = nil
+            body = nil
 
-          status, headers, body = @app.call(env)
-          puts [body.class].inspect
+            status, headers, body = @app.call(env)
 
-          #@run_loop.work do
-            Thread.new do
+            @run_loop.work do
               crang(nil, client, status, headers, body, env).promise.progress do |sdsd|
-              puts [sdsd, :WWEWEWE].inspect
                 retry_defer.notify(request_depth + 1)
               end
             end
-          #end
 
-=begin
-          if headers["Content-Type"] == "text/event-stream"
-            #TODO: figure out threads/co-routines
-          else
-            crang(:alt, client, status, headers, body, env)
+            should_parse_http = false
+            outer_http_parser.reset!
           end
-=end
-
         end
-        
-        should_parse_http = false
-
-        #outer_http_parser.reset!
 
         :stop
       end
@@ -240,12 +198,13 @@ module Bespoked
       ##################
 
       client.progress do |chunk|
+        #puts [:aaa, chunk].inspect
         if should_parse_http
           offset_of_body_left_in_buffer = outer_http_parser << chunk
           body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
-          string_io_alt = StringIO.new(body_left_over).set_encoding('ASCII-8BIT')
-          string_io_alt.rewind
-          defer_until_after_body.notify(string_io_alt)
+          #string_io_alt = StringIO.new(body_left_over).set_encoding('ASCII-8BIT')
+          #string_io_alt.rewind
+          defer_until_after_body.notify(body_left_over)
         else
           defer_until_after_body.notify(chunk)
         end
@@ -255,7 +214,7 @@ module Bespoked
     end
 
     def crang(alt, client, status, headers, body, env)
-      if alt == :alt
+      #if alt == :alt
         unless headers["Content-Length"]
           length = 0
           body.each { |b|
@@ -263,7 +222,7 @@ module Bespoked
           }
           headers["Content-Length"] = length.to_s
         end
-      end
+      #end
 
       response = String.new
 
@@ -272,8 +231,6 @@ module Bespoked
 
       body_out = send_body(client, body)
       response.concat(body_out) if body_out.length > 0
-
-      ##puts [response].inspect
 
       wrote_defer = @run_loop.defer
       thang(client, response, wrote_defer) unless client.closed?
@@ -286,7 +243,6 @@ module Bespoked
       headers.each { |k, vs|
         vs.split("\n").each { |v|
           out = "#{k}: #{v}\r\n"
-          puts [env["PATH_INFO"], out].inspect
           chunk.concat(out)
         }
       }
@@ -297,12 +253,10 @@ module Bespoked
     def send_body(client, body, wait = false)
       chunk = String.new
       body.each { |part|
-        #puts [length, part].inspect
         if part
           unless part.is_a?(String)
             part = part.to_s
           end
-          #puts [part].inspect
           chunk.concat(part)
         end
       }
@@ -312,7 +266,6 @@ module Bespoked
     def thang(client, chunk, wrote_defer)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a|
-          puts :wrote_next_step
           wrote_defer.notify(:step)
         }.catch { |e|
           #TODO: record support
