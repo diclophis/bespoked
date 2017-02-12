@@ -8,13 +8,13 @@ module Bespoked
     end
 
     def start(run_loop)
-      stdout_pipe = run_loop.pipe
-      stdout_pipe.open(@io.fileno)
+      @stdout_pipe = run_loop.pipe
+      @stdout_pipe.open(@io.fileno)
 
       @libuv_logger = run_loop.defer
       @libuv_logger.promise.progress do |log_entry|
-        stdout_pipe.write(log_entry)
-        stdout_pipe.write($/)
+        @stdout_pipe.write(log_entry)
+        @stdout_pipe.write($/)
       end
     end
 
@@ -39,7 +39,8 @@ module Bespoked
 
 		#flush must be called without arguments and must be called in order to make the error appear for sure.
 		def flush
-			add(1, nil, "flush")
+			#add(1, nil, "flush")
+      #@stdout_pipe.flush
 		end
 
 		#close must never be called on the error stream.

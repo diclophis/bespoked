@@ -12,25 +12,25 @@ module Bespoked
     end
 
     def gets
-      $global_logger.notify([:gets])
+      #$global_logger.notify([:gets])
       read
     end
 
     def read(*args)
       rad = @io.read
-      $global_logger.notify([:read, args, rad])
+      #$global_logger.notify([:read, args, rad])
       rad
     end
 
     def each
-      $global_logger.notify([:each])
+      #$global_logger.notify([:each])
 			while chunk = fd.read
 				yield chunk
 			end
     end
 
     def rewind
-      $global_logger.notify([:rewind])
+      #$global_logger.notify([:rewind])
       @io.rewind
     end
   end
@@ -42,7 +42,7 @@ module Bespoked
     end
 
     def call(args)
-      $global_logger.notify([:call, args])
+      #$global_logger.notify([:call, args])
       self
     end
   end
@@ -141,8 +141,8 @@ module Bespoked
         'HTTP_VERSION'      => "HTTP/#{http_parser_http_version.join(".")}",
 
         'RACK_VERSION'      => ::Rack::VERSION.to_s,
-        'RACK_ERRORS'       => "",
-        "RACK_INPUT"        => "",
+        'RACK_ERRORS'       => "", #@logger,
+        "RACK_INPUT"        => "", #input_io.to_s,
 
         'rack.url_scheme'   => scheme,
         'rack.hijack?'      => hijack,
@@ -152,7 +152,7 @@ module Bespoked
         "rack.version"      => ::Rack::VERSION.to_s.split("."),
         "rack.multithread"  => true,
         "rack.multiprocess" => true,
-        "rack.run_once"     => true,
+        "rack.run_once"     => false,
         "rack.input"        => input_io
       )
 
@@ -183,12 +183,14 @@ module Bespoked
       #record :debug, :after_call, []
 
       crang(nil, client, status, headers, body, env).promise.progress do |sdsd|
-        record :retry [request_depth]
+        #record :retry [request_depth]
         retry_defer.notify(request_depth + 1)
       end
     end
 
     def handle_client(retry_defer, client, request_depth)
+      self.record :foo, [request_depth]
+
       outer_io = StringIO.new
       #StringIO.new(body_left_over)
       outer_io.set_encoding('ASCII-8BIT')
@@ -200,17 +202,18 @@ module Bespoked
 
       # One chunk of the body
       outer_http_parser.on_body = proc do |chunk|
+        should_parse_http = false
+
       end
 
       # HTTP headers available
       outer_http_parser.on_headers_complete = proc do
-        should_parse_http = false
-
         defer_until_after_body.promise.progress do |string_io|
-          #@run_loop.work do
-          #Thread.new do
-            foop(outer_http_parser, outer_io, client, retry_defer, request_depth)
-          #end
+          @run_loop.work do
+            Thread.new do
+              foop(outer_http_parser, outer_io, client, retry_defer, request_depth)
+            end.join
+          end
         end
 
         :stop
@@ -229,7 +232,7 @@ module Bespoked
 
         length_required = outer_http_parser.headers["Content-Length"] || 0
         length_required = length_required.to_i
-        #record :length, [outer_io.length, length_required]
+        record :length, [outer_io.length, length_required]
 
         if length_required == 0 || outer_io.length == length_required
           #record :resolving, []
@@ -294,12 +297,13 @@ module Bespoked
     def thang(client, chunk, wrote_defer)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a|
+          #client.close
           wrote_defer.notify(:step)
         }.catch { |e|
           #TODO: record support
           #record :info, :proxy_write_error, [e].inspect
           if e.is_a?(Libuv::Error::ECANCELED)
-            client.close
+            #client.close
           end
         }
       end
