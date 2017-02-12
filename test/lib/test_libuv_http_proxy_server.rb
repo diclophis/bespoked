@@ -2,24 +2,33 @@ require_relative '../test_helper'
 
 class LibUVHttpProxyServerTest < MiniTest::Spec
   MOCK_HTTP_REQUEST = <<-HERE
-GET / HTTP/1.1
+GET /first HTTP/1.1
 Host: localhost
 User-Agent: minitest/ruby
-Accept: */*
-Connection: close
+Accept: */png
+Connection: keep-alive
+
+GET /second HTTP/1.1
+Host: localhost
+User-Agent: minitest/ruby
+Accept: */txt
+Connection: keep-alive
 
 HERE
 
+=begin
+GET /second HTTP/1.1
+Host: localhost
+User-Agent: minitest/ruby
+Accept: */*
+Content-Length: 32
+Connection: keep-alive
+
+12345678901234567890123456789012
+=end
+
   before do
     @run_loop = Libuv::Reactor.new
-
-    #logger = @run_loop.defer
-    #@logs = []
-    ##@run_loop.run(:UV_RUN_ONCE) do
-    #  logger.promise.progress do |log_entry|
-    #    @logs << log_entry
-    #  end
-    ##end
 
     install_failsafe_timeout(@run_loop)
 
@@ -31,20 +40,15 @@ HERE
       :Port => 4545
     }
 
-    #@stop_mock_servers_defer = @run_loop.defer
-    #@stop_mock_servers_defer.promise.then do
-    #  puts :cheese
-    #  @run_loop.stop
-    #end
-
+    @called_upstream = 0
     @mock_upstream_app = proc { |env|
-      #@stop_mock_servers_defer.resolve(true)
-
       #[200, {"Content-Type" => "text"}, ["example rack handler"]]
+      @called_upstream += 1
       [200, {"Content-Type" => "text/event-stream"}, ["example rack handler"]]
     }
 
-    @mock_upstream_server = Bespoked::LibUVRackServer.new(@run_loop, @mock_upstream_app, @mock_upstream_options)
+    @logger = Bespoked::Logger.new(STDERR)
+    @mock_upstream_server = Bespoked::LibUVRackServer.new(@run_loop, @logger, @mock_upstream_app, @mock_upstream_options)
 
     @mock_proxy_controller = Bespoked::ProxyController.new(@run_loop, nil)
     @mock_proxy_controller.vhosts = {
@@ -81,29 +85,23 @@ HERE
   describe "http proxy service" do
     it "redirects and proxies all requests to an upstream http server" do
       @run_loop.run do
+        @logger.start(@run_loop)
         @mock_upstream_server.start
         @http_proxy_server.start
       
         client = @run_loop.tcp
 
         client.catch do |reason|
-          puts reason.inspect
           #client.shutdown
         end
 
         client.progress do |data|
-          puts [:data, data].inspect
-          client.close
-          #@mock_upstream_server.shutdown
-          #@http_proxy_server.shutdown
-          #@run_loop.stop
+          @logger.puts [:called_upstream, @called_upstream].inspect
         end
 
         # close the handle
         client.finally do
           @run_loop.stop
-          #client.close
-          #client.shutdown
         end
 
         client.connect(Bespoked::DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]) do
@@ -111,6 +109,8 @@ HERE
           client.start_read
         end
       end
+
+      @called_upstream.must_equal 2
     end
   end
 end

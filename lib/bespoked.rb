@@ -14,6 +14,8 @@ require 'webrick'
 module Bespoked
   DEFAULT_LIBUV_SOCKET_BIND = "0:0:0:0:0:0:0:0"
 
+  autoload :Logger, 'bespoked/logger'
+
   # bind... are "servers"
   autoload :LibUVRackServer, 'bespoked/libuv_rack_server'
   autoload :LibUVHttpProxyServer, 'bespoked/libuv_http_proxy_server'

@@ -61,11 +61,11 @@ module Bespoked
       new_client = run_loop.tcp
 
       new_client.catch do |err|
-        halt_connection(client, 500, :proxy_client_error)
+        halt_connection(client, 500, [err, err.backtrace, :proxy_client_error])
       end
 
       new_client.finally do |err|
-        # record :debug, :upstream_server_closed, [err, err.class].inspect
+        record :debug, :upstream_server_closed, [err, err.class].inspect
         client.close
       end
 
@@ -131,10 +131,9 @@ module Bespoked
     def thang(client, chunk)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a| }.catch { |e|
-          record :info, :proxy_write_error, [e].inspect
-          if e.is_a?(Libuv::Error::ECANCELED)
-            client.close
-          end
+          should_close = e.is_a?(Libuv::Error::ECANCELED)
+          record :info, :proxy_write_error, [e, should_close].inspect
+          client.close if should_close
         }
       end
     end
@@ -222,7 +221,7 @@ module Bespoked
       # record :debug, :halt_connection, [reason].inspect
       response = reason.to_s
       client.write("HTTP/1.1 #{status} Halted\r\nConnection: close\r\nContent-Length: #{response.length}\r\n\r\n#{response}", {:wait => :promise}).then {
-        # record :debug, :wrote_halted
+        record :debug, :wrote_halted_and_closed
         client.close
       }.catch { |e|
         record :info, :wrote_halted_catch, [e].inspect
