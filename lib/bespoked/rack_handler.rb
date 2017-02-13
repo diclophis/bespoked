@@ -39,34 +39,14 @@ module Bespoked
 
         foo = run_loop.timer
         foo.progress do
-          #$global_logger.notify(Thread.list.to_s)
-          #Thread.list.each do |t|
-          #  unless thread_list_at_start.include?(t)
-          #    $global_logger.notify({:thread_pass => t})
-          #    t.wakeup 
-          #    Thread.pass
-          #  end
-          #end
-
-          $global_logger.notify({:thread_pass => true})
+          #TODO: figure this out...
           DRb.thread.run if DRb.thread
-
-          #if Thread.pending_interrupt?
-          #  $global_logger.notify({:thread_pass => true})
-          #  Thread.handle_interrupt(Object => :immediate) {}
-          #end
         end
         foo.start(1, 1)
 
         run_loop.prepare {
-          #$global_logger.notify(".")
-          #run_loop.stop
-          #DRb.thread.run if DRb.thread
-          #Thread.pass
-          #if Thread.pending_interrupt?
-          #  $global_logger.notify({:thread_pass => true})
-          #  Thread.handle_interrupt(Object => :immediate) {}
-          #end
+          #TODO: figure this out...
+          DRb.thread.run if DRb.thread
         }.start
       end
     end
