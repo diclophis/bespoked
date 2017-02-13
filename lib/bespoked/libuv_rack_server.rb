@@ -93,7 +93,7 @@ module Bespoked
       @server.close
     end
 
-    def foop(outer_http_parser, outer_io, client, retry_defer, request_depth)
+    def foop(outer_http_parser, outer_io, client, callback_defer, request_depth)
       http_parser_http_version = outer_http_parser.http_version || ["1", "1"]
       http_parser_http_method = outer_http_parser.http_method || "GET"
       http_parser_headers = outer_http_parser.headers || {}
@@ -180,43 +180,33 @@ module Bespoked
       body = nil
 
       status, headers, body = @app.call(env)
-      record :debug, :after, [path_info]
 
       crang(nil, client, status, headers, body, env).promise.progress do |sdsd|
-        record :no_retry [request_depth]
-        #retry_defer.notify(request_depth + 1)
+        callback_defer.close
       end
     end
 
     def handle_client(retry_defer, client, request_depth)
-      self.record :foo, [request_depth]
-
       outer_io = StringIO.new
-      #StringIO.new(body_left_over)
       outer_io.set_encoding('ASCII-8BIT')
 
       outer_http_parser = Http::Parser.new
-      #should_parse_http = true
 
       defer_until_after_body = @run_loop.defer
 
       # One chunk of the body
       outer_http_parser.on_body = proc do |chunk|
-        #should_parse_http = false
         outer_io << chunk
       end
 
       outer_http_parser.on_message_complete = proc do |env|
-        record :on_message, [env, outer_http_parser.headers]
-        #outer_io.rewind
-        #defer_until_after_body.notify(outer_io)
-        #defer_until_after_body.promise.progress do |string_io|
-          #@run_loop.work do
-          #  Thread.new do
-              foop(outer_http_parser, outer_io, client, retry_defer, request_depth)
-          #  end.join
-          #end
-        #end
+        callback = @run_loop.async do
+          foop(outer_http_parser, outer_io, client, callback, request_depth)
+        end
+
+        @run_loop.work(proc {
+          callback.call
+        })
       end
 
       # HTTP headers available
@@ -228,27 +218,12 @@ module Bespoked
 
       client.progress do |chunk|
         offset_of_body_left_in_buffer = outer_http_parser << chunk
-        record :offeset_length, [offset_of_body_left_in_buffer]
-        #if offset_of_body_left_in_buffer > 0
-        #  body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
-        #  outer_io << body_left_over
-        #end
       end
 
       client.start_read
     end
 
     def crang(alt, client, status, headers, body, env)
-      #if alt == :alt
-        #unless headers["Content-Length"]
-        #  length = 0
-        #  body.each { |b|
-        #    length += b.length
-        #  }
-        #  headers["Content-Length"] = length.to_s
-        #end
-      #end
-
       response = String.new
 
       headers_out = send_headers(client, status, headers, env)
@@ -257,8 +232,8 @@ module Bespoked
       body_out = send_body(client, body)
       response.concat(body_out) if body_out.length > 0
 
+      #TODO: figure out this case
       keep_alive = headers["Connection"]
-      self.record :keep_alive, [keep_alive]
 
       wrote_defer = @run_loop.defer
       thang(client, response, keep_alive, wrote_defer) unless client.closed?
@@ -294,12 +269,10 @@ module Bespoked
     def thang(client, chunk, keep_alive, wrote_defer)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a|
-          record :info, :wrote_response_body, [a, keep_alive].inspect
           client.close unless keep_alive
           wrote_defer.notify(:step)
         }.catch { |e|
           should_close = e.is_a?(Libuv::Error::ECANCELED)
-          record :info, :proxy_write_error, [e, should_close].inspect
           client.close if should_close
         }
       end

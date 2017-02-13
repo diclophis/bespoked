@@ -47,13 +47,16 @@ module Bespoked
           #    Thread.pass
           #  end
           #end
+
+          $global_logger.notify({:thread_pass => true})
           DRb.thread.run if DRb.thread
+
           #if Thread.pending_interrupt?
           #  $global_logger.notify({:thread_pass => true})
           #  Thread.handle_interrupt(Object => :immediate) {}
           #end
         end
-        foo.start(1000, 1000)
+        foo.start(1, 1)
 
         run_loop.prepare {
           #$global_logger.notify(".")
