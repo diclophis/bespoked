@@ -1,54 +1,54 @@
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: bespoked-service
-  namespace: default
-spec:
-  # The default backend must be of type NodePort.
-  type: NodePort
-  ports:
-  - nodePort: 80
-    port: 8888
-    targetPort: 8888
-    protocol: TCP
-    name: http
-  selector:
-    k8s-app: bespoked
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: bespoked-health-service
-  namespace: default
-spec:
-  # The default backend must be of type NodePort.
-  type: NodePort
-  ports:
-  - nodePort: 30002
-    port: 8889
-    targetPort: 8889
-    protocol: TCP
-    name: http
-  selector:
-    k8s-app: bespoked
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: bespoked-dashboard-service
-  namespace: default
-spec:
-  # The default backend must be of type NodePort.
-  type: NodePort
-  ports:
-  - nodePort: 30003
-    port: 8890
-    targetPort: 8890
-    protocol: TCP
-    name: http
-  selector:
-    k8s-app: bespoked
+#---
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: bespoked-service
+#  namespace: default
+#spec:
+#  # The default backend must be of type NodePort.
+#  type: NodePort
+#  ports:
+#  - nodePort: 30001
+#    port: 8888
+#    targetPort: 8888
+#    protocol: TCP
+#    name: http
+#  selector:
+#    k8s-app: bespoked
+#---
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: bespoked-health-service
+#  namespace: default
+#spec:
+#  # The default backend must be of type NodePort.
+#  type: NodePort
+#  ports:
+#  - nodePort: 30002
+#    port: 8889
+#    targetPort: 8889
+#    protocol: TCP
+#    name: http
+#  selector:
+#    k8s-app: bespoked
+#---
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: bespoked-dashboard-service
+#  namespace: default
+#spec:
+#  # The default backend must be of type NodePort.
+#  type: NodePort
+#  ports:
+#  - nodePort: 30003
+#    port: 8890
+#    targetPort: 8890
+#    protocol: TCP
+#    name: http
+#  selector:
+#    k8s-app: bespoked
 ---
 apiVersion: v1
 kind: ReplicationController
@@ -75,8 +75,13 @@ spec:
       containers:
       - image: #NOTE: this is re-written via manifest.rb
         imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8889
+          hostPort: 80
+        - containerPort: 8888
+          hostPort: 8080
         env:
-        - name: HTTP_EXAMPLE_X_FORWARDED_PROTO
+        - name: HTTP_X_FORWARDED_PROTO
           value: "https"
         name: bespoked-controller
         resources:
