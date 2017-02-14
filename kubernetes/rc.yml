@@ -81,8 +81,8 @@ spec:
         - containerPort: 8888
           hostPort: 8880
         env:
-        - name: HTTP_X_FORWARDED_PROTO
-          value: "https"
+        #- name: HTTP_X_FORWARDED_PROTO
+        #  value: "https"
         name: bespoked-controller
         resources:
           limits:
