@@ -77,9 +77,9 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8889
-          hostPort: 80
+          hostPort: 8881
         - containerPort: 8888
-          hostPort: 8080
+          hostPort: 8880
         env:
         - name: HTTP_X_FORWARDED_PROTO
           value: "https"
