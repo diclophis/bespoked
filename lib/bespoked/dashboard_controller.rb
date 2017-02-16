@@ -8,7 +8,7 @@ module Bespoked
 
     def initialize(run_loop_in, proxy_controller_in)
       self.run_loop = run_loop_in
-      self.rack_server = LibUVRackServer.new(@run_loop, method(:handle_request), {:Port => 8890})
+      self.rack_server = LibUVRackServer.new(@run_loop, method(:handle_request), {:Port => 55003})
       self.proxy_controller = proxy_controller_in
     end
 
