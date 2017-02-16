@@ -49,6 +49,7 @@ module Bespoked
           http["paths"].each do |http_path|
             service_name = http_path["backend"]["serviceName"]
             if @entry_point && service = @entry_point.locate_service(service_name)
+              @entry_point.record :info, :descriptions, [@entry_point.descriptions.keys].inspect
               if spec = service["spec"]
                 upstreams = []
                 if ports = spec["ports"]

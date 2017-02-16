@@ -24,7 +24,7 @@ module Bespoked
     FAILED_TO_AUTH_TIMEOUT = 5000
     RELOAD_TIMEOUT = 100
 
-    KINDS = ["pod", "service", "ingress", "endpoint"]
+    KINDS = ["pod", "service", "ingress", "endpoint", "secret"]
     KINDS.each do |kind|
       register_method = "register_#{kind}"
       locate_method = "locate_#{kind}"
@@ -233,6 +233,11 @@ module Bespoked
               self.register_ingress(type, ingress)
             end
 
+          when "SecretList"
+            event["items"].each do |secret|
+              self.register_secret(type, secret)
+            end
+
           when "Pod"
             self.register_pod(type, description)
 
@@ -246,6 +251,9 @@ module Bespoked
 
           when "Ingress"
             self.register_ingress(type, description)
+
+          when "Secret"
+            self.register_secret(type, description)
 
         else
           self.record(:info, :unsupported_resource_list_type, kind)

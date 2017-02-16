@@ -46,6 +46,9 @@ module Bespoked
           when "endpoints"
             path_prefix % ["api/v1", "endpoints"]
 
+          when "secrets"
+            path_prefix % ["api/v1", "secrets"]
+
         else
           raise "unknown api Kind to watch: #{kind}"
         end

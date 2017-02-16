@@ -25,7 +25,7 @@ run_loop.run do |exception_handler|
   bespoked = Bespoked::EntryPoint.new(
     run_loop,
     logger,
-    ["ingresses", "services", "pods"],
+    ["ingresses", "services", "pods", "secrets"],
     {
     "proxy-controller-factory-class" => ENV["BESPOKED_PROXY_CLASS"],
     "watch-factory-class" => ENV["BESPOKED_WATCH_CLASS"]
