@@ -3,7 +3,7 @@ source 'https://rubygems.org'
 gemspec
 
 # Ruby bindings for libuv
-gem 'libuv', :git => "https://github.com/mavenlink/libuv.git", :branch => "with-upstream-master"
+gem 'libuv', :git => "https://github.com/mavenlink/libuv.git", :branch => "master"
 
 gem 'syncretizer', :git => "https://github.com/diclophis/syncretizer.git", :branch => "master"
 
