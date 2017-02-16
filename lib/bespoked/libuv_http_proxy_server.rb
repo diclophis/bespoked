@@ -65,8 +65,8 @@ module Bespoked
       end
 
       new_client.finally do |err|
-        record :debug, :upstream_server_closed, [err, err.class].inspect
-        client.close
+        #record :debug, :upstream_server_closed, [err, err.class].inspect
+        #client.close
       end
 
       client.progress do |chunk|
@@ -131,7 +131,7 @@ module Bespoked
     def thang(client, chunk)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a| }.catch { |e|
-          should_close = e.is_a?(Libuv::Error::ECANCELED)
+          should_close = false && e.is_a?(Libuv::Error::ECANCELED)
           record :info, :proxy_write_error, [e, should_close].inspect
           client.close if should_close
         }
