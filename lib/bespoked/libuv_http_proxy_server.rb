@@ -5,9 +5,11 @@ module Bespoked
     attr_accessor :run_loop,
                   :logger,
                   :proxy_controller,
-                  :server
+                  :server,
+                  :shutdown_promises
 
     def initialize(run_loop_in, logger_in, proxy_controller_in, options={})
+      self.shutdown_promises = {}
       self.run_loop = run_loop_in
       self.logger = logger_in
       self.proxy_controller = proxy_controller_in
@@ -51,8 +53,13 @@ module Bespoked
       end
     end
 
+    def install_shutdown_promise(client)
+      @shutdown_promises[client] ||= @run_loop.defer
+    end
+
     def handle_client(client)
       # record :debug, :start_handle_client, [client].inspect
+      install_shutdown_promise(client)
 
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
@@ -65,8 +72,13 @@ module Bespoked
       end
 
       new_client.finally do |err|
-        #record :debug, :upstream_server_closed, [err, err.class].inspect
-        #client.close
+        record :debug, :upstream_server_closed, [err, err.class].inspect
+        sp = install_shutdown_promise(client)
+        record :debug, :sp_one, [client.class, client].inspect
+        sp.promise.progress do
+          record :info, :upstream_server_closed_and_closed, []
+          client.close
+        end
       end
 
       client.progress do |chunk|
@@ -124,14 +136,19 @@ module Bespoked
 
       ##################
 
-
       client.start_read
     end
 
-    def thang(client, chunk)
+    def write_chunk_to_socket(client, chunk)
       if client && chunk && chunk.length > 0
-        client.write(chunk, {:wait => :promise}).then { |a| }.catch { |e|
-          should_close = false && e.is_a?(Libuv::Error::ECANCELED)
+        client.write(chunk, {:wait => :promise}).then { |a|
+          record :info, :proxy_wrote_write_chunk_to_socket, []
+          install_shutdown_promise(client).promise.progress do
+            record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
+          end
+          install_shutdown_promise(client).notify
+        }.catch { |e|
+          should_close = e.is_a?(Libuv::Error::ECANCELED)
           record :info, :proxy_write_error, [e, should_close].inspect
           client.close if should_close
         }
@@ -163,8 +180,9 @@ module Bespoked
       http_parser.headers.merge(proxy_override_headers)
     end
 
-    def dourt(http_parser, client, body_left_over)
-      request_to_upstream = String.new
+    def construct_upstream_request(http_parser, client, body_left_over)
+      #request_to_upstream = String.new
+      request_to_upstream = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
 
       headers_for_upstream_request = header_stack(http_parser, client)
       headers_for_upstream_request.each { |k, vs|
@@ -196,20 +214,16 @@ module Bespoked
 
     #TODO: pass ENV somehow
     def other_twang(http_parser, new_client, client, body_left_over)
-      upstream_handshake = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
-      #TODO: refactor
-      new_client.write(upstream_handshake, wait: true)
+      request_to_upstream = construct_upstream_request(http_parser, client, body_left_over)
 
-      request_to_upstream = dourt(http_parser, client, body_left_over)
-
-      #foop
       new_client.start_read
-      thang(new_client, request_to_upstream)
+
+      write_chunk_to_socket(new_client, request_to_upstream)
     end
 
     def do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
       new_client.progress(&proc { |chunk|
-        thang(client, chunk) unless client.closed?
+        write_chunk_to_socket(client, chunk) unless client.closed?
       })
 
       new_client.connect(ip_address, port.to_i, &proc {

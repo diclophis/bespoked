@@ -48,6 +48,7 @@ Connection: keep-alive
     }
 
     @logger = Bespoked::Logger.new(STDERR)
+    @logger.start(@run_loop)
     @mock_upstream_server = Bespoked::LibUVRackServer.new(@run_loop, @logger, @mock_upstream_app, @mock_upstream_options)
 
     @mock_proxy_controller = Bespoked::ProxyController.new(@run_loop, nil)
@@ -55,7 +56,7 @@ Connection: keep-alive
       "localhost" => "localhost:#{@mock_upstream_options[:Port]}"
     }
 
-    @http_proxy_server = Bespoked::LibUVHttpProxyServer.new(@run_loop, nil, @mock_proxy_controller, @mock_instream_options)
+    @http_proxy_server = Bespoked::LibUVHttpProxyServer.new(@run_loop, @logger, @mock_proxy_controller, @mock_instream_options)
   end
 
   after do
@@ -85,7 +86,6 @@ Connection: keep-alive
   describe "http proxy service" do
     it "redirects and proxies all requests to an upstream http server" do
       @run_loop.run do
-        @logger.start(@run_loop)
         @mock_upstream_server.start
         @http_proxy_server.start
       
