@@ -10,6 +10,10 @@ module Bespoked
       self.http_proxy_server = LibUVHttpProxyServer.new(@run_loop, @entry_point.logger, self, {:Port => 55001})
     end
 
+    def add_tls_host(private_key, cert_chain, host_name)
+      @http_proxy_server.add_tls_host(private_key, cert_chain, host_name)
+    end
+
     def shutdown
       @http_proxy_server.shutdown
     end

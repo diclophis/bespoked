@@ -25,16 +25,27 @@ module Bespoked
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
-        #tls_options = {
-        #  :server => true,
-        #  :verify_peer => true,
-        #  :private_key => 'private_key.pem',
-        #  :cert_chain => 'cert_chain.crt'
-        #}
-        #client.start_tls(tls_options)
 
         handle_client(client)
       end
+    end
+
+    def add_tls_host(private_key, cert_chain, host_name)
+      record :info, :add_tls_host, [private_key, cert_chain, host_name].inspect
+
+      temp_key = Tempfile.new('bespoked-tls-key')
+      temp_key.write(Base64.decode64(private_key))
+      temp_key.rewind
+
+      temp_crt = Tempfile.new('bespoked-tls-crt')
+      temp_crt.write(Base64.decode64(cert_chain))
+      temp_crt.rewind
+
+      @server.add_host({
+        :private_key => temp_key.path,
+        :cert_chain => temp_crt.path,
+        :host_name => host_name
+      })
     end
 
     def start
@@ -136,6 +147,12 @@ module Bespoked
 
       ##################
 
+      #TODO: determine how to switch here based on if this is the ssl one or not...
+      tls_options = {
+        :server => true,
+        :verify_peer => true
+      }
+      client.start_tls(tls_options)
       client.start_read
     end
 

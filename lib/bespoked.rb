@@ -10,6 +10,8 @@ require 'rack'
 require 'rack/handler'
 require 'socket'
 require 'webrick'
+require 'tempfile'
+require 'base64'
 
 module Bespoked
   DEFAULT_LIBUV_SOCKET_BIND = "0:0:0:0:0:0:0:0"

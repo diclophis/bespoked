@@ -18,7 +18,6 @@ module Bespoked
 
     def install(ingress_descriptions)
       #@run_loop.log(:info, :proxy_controller_install, ingress_descriptions.keys)
-
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
         #@run_loop.log(:info, :vhosts_extracted, vhosts_for_ingress)
@@ -37,9 +36,29 @@ module Bespoked
       end
     end
 
+    def add_tls_host(private_key, cert_chain, host_name)
+      raise "wtf"
+    end
+
     def extract_vhosts(description)
       ingress_name = self.extract_name(description)
       spec_rules = description["spec"]["rules"]
+      spec_tls = description["spec"]["tls"]
+
+      #TODO: refactor this elsewhere, maybe
+			if spec_tls && spec_tls.length > 0
+				spec_tls.each do |hosts_and_secret|
+					list_of_hosts = hosts_and_secret["hosts"]
+          secret_name = hosts_and_secret["secretName"]
+          tls_secret = @entry_point.locate_secret(secret_name)
+          data = tls_secret["data"] # has_keys? tls.crt, tls.key
+
+          list_of_hosts.each do |host|
+            @entry_point.record :info, :tls, [list_of_hosts, host, data.keys].inspect
+            self.add_tls_host(data["tls.key"], data["tls.crt"], host)
+          end
+        end
+			end
 
       vhosts = []
 
@@ -49,7 +68,6 @@ module Bespoked
           http["paths"].each do |http_path|
             service_name = http_path["backend"]["serviceName"]
             if @entry_point && service = @entry_point.locate_service(service_name)
-              @entry_point.record :info, :descriptions, [@entry_point.descriptions.keys, @entry_point.descriptions].inspect
               if spec = service["spec"]
                 upstreams = []
                 if ports = spec["ports"]
