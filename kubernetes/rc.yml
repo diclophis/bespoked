@@ -8,6 +8,11 @@ spec:
   # The default backend must be of type NodePort.
   type: NodePort
   ports:
+  - nodePort: 80
+    port: 55101
+    targetPort: 55101
+    protocol: TCP
+    name: http-lets-encrypt
   - nodePort: 30001
     port: 55001
     targetPort: 55001
@@ -76,10 +81,12 @@ spec:
       - image: #NOTE: this is re-written via manifest.rb
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 55002
-          hostPort: 8881
         - containerPort: 55001
           hostPort: 8880
+        - containerPort: 55002
+          hostPort: 8881
+        - containerPort: 55101
+          hostPort: 8888
         env:
         #- name: HTTP_X_FORWARDED_PROTO
         #  value: "https"

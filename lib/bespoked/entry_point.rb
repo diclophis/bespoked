@@ -18,10 +18,11 @@ module Bespoked
                   :reconnect_timer,
                   :authenticated,
                   :stopping,
-                  :heartbeat
+                  :heartbeat,
+                  :tls_controller
 
     RECONNECT_WAIT = 60000
-    FAILED_TO_AUTH_TIMEOUT = 5000
+    FAILED_TO_AUTH_TIMEOUT = 50000
     RELOAD_TIMEOUT = 100
 
     KINDS = ["pod", "service", "ingress", "endpoint", "secret"]
@@ -63,8 +64,10 @@ module Bespoked
       self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "KubernetesApiWatchFactory")
       self.watch_factory = @watch_factory_class.new(@run_loop)
 
+      # fork these into sub processes?
       self.health_controller = Bespoked::HealthController.new(@run_loop, @logger)
       self.dashboard_controller = Bespoked::DashboardController.new(@run_loop, @logger, @proxy_controller)
+      self.tls_controller = Bespoked::TlsController.new(@run_loop, @logger, proxy_controller)
 
       self.watches = []
 
@@ -118,6 +121,7 @@ module Bespoked
       @proxy_controller.shutdown
       @health_controller.shutdown
       @dashboard_controller.shutdown
+      @tls_controller.shutdown
     end
 
     def on_failed_to_auth_cb
@@ -138,6 +142,7 @@ module Bespoked
       @proxy_controller.start
       @health_controller.start
       @dashboard_controller.start
+      @tls_controller.start
 
       self.failure_to_auth_timer = @run_loop.timer
       @failure_to_auth_timer.progress do

@@ -35,12 +35,12 @@ module Bespoked
 
       temp_key = Tempfile.new('bespoked-tls-key')
       key_path = temp_key.path + ".keep"
-      File.write(key_path, Base64.decode64(private_key))
+      File.write(key_path, (private_key))
       temp_key.close
 
       temp_crt = Tempfile.new('bespoked-tls-crt')
       crt_path = temp_crt.path + ".keep"
-      File.write(crt_path, Base64.decode64(cert_chain))
+      File.write(crt_path, (cert_chain))
       temp_crt.close
 
       @server.add_host({

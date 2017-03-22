@@ -55,7 +55,7 @@ module Bespoked
 
           list_of_hosts.each do |host|
             @entry_point.record :info, :tls, [list_of_hosts, host, data.keys].inspect
-            self.add_tls_host(data["tls.key"], data["tls.crt"], host)
+            self.add_tls_host(Base64.decode64(data["tls.key"]), Base64.decode64(data["tls.crt"]), host)
           end
         end
 			end

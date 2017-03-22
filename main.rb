@@ -6,16 +6,21 @@ require 'config/environment'
 
 run_loop = Libuv::Reactor.new
 
+logger = Bespoked::Logger.new(STDERR)
+logger.start(run_loop)
+
 run_loop.run do |exception_handler|
   #LOGGING
-  stdout_pipe = run_loop.pipe
-  stdout_pipe.open($stdout.fileno)
+  #stdout_pipe = run_loop.pipe
+  #stdout_pipe.open($stdout.fileno)
 
-  logger = run_loop.defer
-  logger.promise.progress do |log_entry|
-    stdout_pipe.write(Yajl::Encoder.encode(log_entry))
-    stdout_pipe.write($/)
-  end
+  #logger = run_loop.defer
+  #logger.promise.progress do |log_entry|
+  #  stdout_pipe.write(Yajl::Encoder.encode(log_entry))
+  #  stdout_pipe.write($/)
+  #end
+
+puts "wtf"
 
   exception_handler.notifier do |error, message, trace|
     logger.notify({:lineno => :main, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})

@@ -12,6 +12,8 @@ require 'socket'
 require 'webrick'
 require 'tempfile'
 require 'base64'
+require 'acme-client'
+require 'openssl'
 
 module Bespoked
   DEFAULT_LIBUV_SOCKET_BIND = "0:0:0:0:0:0:0:0"
@@ -38,6 +40,7 @@ module Bespoked
   autoload :RackProxyController, 'bespoked/rack_proxy_controller'
   autoload :HealthController, 'bespoked/health_controller'
   autoload :DashboardController, 'bespoked/dashboard_controller'
+  autoload :TlsController, 'bespoked/tls_controller'
 
   # generic rack support
   autoload :RackHandler, 'bespoked/rack_handler'
