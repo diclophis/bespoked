@@ -63,8 +63,8 @@ module Bespoked
       self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "KubernetesApiWatchFactory")
       self.watch_factory = @watch_factory_class.new(@run_loop)
 
-      self.health_controller = Bespoked::HealthController.new(@run_loop)
-      self.dashboard_controller = Bespoked::DashboardController.new(@run_loop, @proxy_controller)
+      self.health_controller = Bespoked::HealthController.new(@run_loop, @logger)
+      self.dashboard_controller = Bespoked::DashboardController.new(@run_loop, @logger, @proxy_controller)
 
       self.watches = []
 
@@ -74,6 +74,10 @@ module Bespoked
         new_watch = @watch_factory.create(resource_to_watch)
         self.install_watch(new_watch)
       end
+    end
+
+    def add_tls_host(private_key, cert_chain, host_name)
+      @proxy_controller.add_tls_host(private_key, cert_chain, host_name)
     end
 
     def record(level = nil, name = nil, message = nil)

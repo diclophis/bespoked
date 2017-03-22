@@ -44,6 +44,7 @@ Connection: keep-alive
     @mock_upstream_app = proc { |env|
       #[200, {"Content-Type" => "text"}, ["example rack handler"]]
       @called_upstream += 1
+      @logger.puts [:app_set_upstream, @called_upstream].inspect
       [200, {"Content-Type" => "text/event-stream"}, ["example rack handler"]]
     }
 
@@ -93,10 +94,14 @@ Connection: keep-alive
 
         client.catch do |reason|
           #client.shutdown
+          @logger.puts [:wtf, reason]
         end
 
         client.progress do |data|
           @logger.puts [:called_upstream, @called_upstream].inspect
+          if @called_upstream > 0
+            client.close
+          end
         end
 
         # close the handle
@@ -104,9 +109,17 @@ Connection: keep-alive
           @run_loop.stop
         end
 
+
         client.connect(Bespoked::DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]) do
-          client.write(MOCK_HTTP_REQUEST, wait: true)
+        #@logger.puts [:wrote_reqs, @called_upstream].inspect
+        #@logger.puts [:wtf, Bespoked::DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]].inspect
+          client.start_tls
           client.start_read
+
+          client.write(MOCK_HTTP_REQUEST, {:wait => :promise}).then { |a|
+            @logger.puts [:wrote_reqs, @called_upstream].inspect
+            client.close
+          }
         end
       end
 

@@ -75,6 +75,7 @@ module Bespoked
 
         handle_client(defer_until_after_body, client, 0)
       end
+      record :server_bound, [self.class, app_in]
     end
 
     def record(level = nil, name = nil, message = nil)
@@ -187,6 +188,8 @@ module Bespoked
     end
 
     def handle_client(retry_defer, client, request_depth)
+      record :handle_client, []
+
       outer_io = StringIO.new
       outer_io.set_encoding('ASCII-8BIT')
 

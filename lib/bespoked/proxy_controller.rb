@@ -37,7 +37,7 @@ module Bespoked
     end
 
     def add_tls_host(private_key, cert_chain, host_name)
-      raise "wtf"
+      @entry_point.add_tls_host(private_key, cert_chain, host_name)
     end
 
     def extract_vhosts(description)

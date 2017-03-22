@@ -17,7 +17,6 @@ module Bespoked
       options[:BindAddress] ||= DEFAULT_LIBUV_SOCKET_BIND
       options[:Port] ||= DEFAULT_LIBUV_HTTP_PROXY_PORT
 
-      record :debug, :http_proxy_server_listen, [options].inspect
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       @server.catch do |reason|
@@ -25,9 +24,10 @@ module Bespoked
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
-
         handle_client(client)
       end
+
+      record :debug, :http_proxy_server_listen, [options].inspect
     end
 
     def add_tls_host(private_key, cert_chain, host_name)
@@ -71,7 +71,7 @@ module Bespoked
     end
 
     def handle_client(client)
-      # record :debug, :start_handle_client, [client].inspect
+      record :debug, :start_handle_client, [client].inspect
       install_shutdown_promise(client)
 
       http_parser = Http::Parser.new
@@ -95,6 +95,7 @@ module Bespoked
       end
 
       client.progress do |chunk|
+        record :debug, :progress, [chunk].inspect
         if reading_state == :request_to_upstream
           if new_client && chunk && chunk.length > 0
             new_client.write(chunk)
@@ -140,7 +141,7 @@ module Bespoked
 
             :stop
           else
-            halt_connection(client, 404, :halted_lack_of_matching_service)
+            halt_connection(client, 404, [:halted_lack_of_matching_service, @proxy_controller.vhosts.keys, in_url.host])
           end
         else
           halt_connection(client, 404, :halted_lack_of_http_host)
@@ -152,7 +153,7 @@ module Bespoked
       #TODO: determine how to switch here based on if this is the ssl one or not...
       tls_options = {
         :server => true,
-        :verify_peer => true
+        :verify_peer => false
       }
       client.start_tls(tls_options)
       client.start_read
