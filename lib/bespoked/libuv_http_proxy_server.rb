@@ -34,16 +34,18 @@ module Bespoked
       record :info, :add_tls_host, [private_key, cert_chain, host_name].inspect
 
       temp_key = Tempfile.new('bespoked-tls-key')
-      temp_key.write(Base64.decode64(private_key))
-      temp_key.rewind
+      key_path = temp_key.path + ".keep"
+      File.write(key_path, Base64.decode64(private_key))
+      temp_key.close
 
       temp_crt = Tempfile.new('bespoked-tls-crt')
-      temp_crt.write(Base64.decode64(cert_chain))
-      temp_crt.rewind
+      crt_path = temp_crt.path + ".keep"
+      File.write(crt_path, Base64.decode64(cert_chain))
+      temp_crt.close
 
       @server.add_host({
-        :private_key => temp_key.path,
-        :cert_chain => temp_crt.path,
+        :private_key => key_path,
+        :cert_chain => crt_path,
         :host_name => host_name
       })
     end
