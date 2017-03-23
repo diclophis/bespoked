@@ -15,6 +15,7 @@ module Bespoked
       self.proxy_controller = proxy_controller_in
       self.rack_server = LibUVRackServer.new(@run_loop, logger_in, method(:handle_request), {:Port => 55101})
 
+=begin
       # We're going to need a private key.
       private_key = OpenSSL::PKey::RSA.new(4096)
 
@@ -34,6 +35,7 @@ module Bespoked
 
       # You may need to agree to the terms of service (that's up the to the server to require it or not but boulder does by default)
       @logger.puts registration.agree_terms
+=end
     end
 
     def install_tls_registration(dns)
@@ -88,7 +90,7 @@ module Bespoked
             timer.stop
           end
         end
-        timer.start(1000, 1000)
+        timer.start(5000, 5000)
       end
     end
 
@@ -104,8 +106,8 @@ module Bespoked
 
     def handle_request(env)
   #while true
-    puts "."
-    @logger.puts "WTFFFFFF"
+    #puts "."
+    #@logger.puts "WTFFFFFF"
 
     if challenge = @challenges[env["PATH_INFO"]]
       @logger.puts challenge.authorization.verify_status # => 'pending'

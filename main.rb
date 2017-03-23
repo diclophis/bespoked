@@ -20,8 +20,6 @@ run_loop.run do |exception_handler|
   #  stdout_pipe.write($/)
   #end
 
-puts "wtf"
-
   exception_handler.notifier do |error, message, trace|
     logger.notify({:lineno => :main, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})
   end
@@ -53,12 +51,12 @@ puts "wtf"
     bespoked.halt :run_loop_terminated
   end
 
-  run_loop.prepare {
-    if bespoked.stopping
-      #TODO: this should maybe not be needed if we clean up everything ok?
-      run_loop.stop
-    end
-  }.start
+  #run_loop.prepare {
+  #  if bespoked.stopping
+  #    #TODO: this should maybe not be needed if we clean up everything ok?
+  #    run_loop.stop
+  #  end
+  #}.start
 
   bespoked.run_ingress_controller
 end

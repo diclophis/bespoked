@@ -1,25 +1,44 @@
 ---
-apiVersion: v1
 kind: Service
+apiVersion: v1
 metadata:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
   name: bespoked-service
   namespace: default
 spec:
-  # The default backend must be of type NodePort.
-  type: NodePort
-  ports:
-  - nodePort: 80
-    port: 55101
-    targetPort: 55101
-    protocol: TCP
-    name: http-lets-encrypt
-  - nodePort: 30001
-    port: 55001
-    targetPort: 55001
-    protocol: TCP
-    name: http
+  type: LoadBalancer
   selector:
     k8s-app: bespoked
+  ports:
+  - name: http
+    port: 80
+    targetPort: tls-incoming
+  - name: https
+    port: 443
+    targetPort: ing-incoming
+
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  name: bespoked-service
+#  namespace: default
+#spec:
+#  # The default backend must be of type NodePort.
+#  type: NodePort
+#  ports:
+#  - nodePort: 80
+#    port: 55101
+#    targetPort: 55101
+#    protocol: TCP
+#    name: http-lets-encrypt
+#  - nodePort: 30001
+#    port: 55001
+#    targetPort: 55001
+#    protocol: TCP
+#    name: http
+#  selector:
+#    k8s-app: bespoked
 #---
 #apiVersion: v1
 #kind: Service
@@ -81,12 +100,19 @@ spec:
       - image: #NOTE: this is re-written via manifest.rb
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 55001
-          hostPort: 8880
-        - containerPort: 55002
-          hostPort: 8881
-        - containerPort: 55101
-          hostPort: 8888
+        - name: ing-incoming
+          containerPort: 55001
+        - name: dash-incoming
+          containerPort: 55002
+        - name: tls-incoming
+          containerPort: 55101
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 55101
+            scheme: HTTP
+          initialDelaySeconds: 30
+          timeoutSeconds: 45
         env:
         #- name: HTTP_X_FORWARDED_PROTO
         #  value: "https"

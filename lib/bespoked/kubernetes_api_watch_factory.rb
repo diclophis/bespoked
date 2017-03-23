@@ -6,7 +6,6 @@ module Bespoked
 
     def create(resource_kind, authentication_timeout = 1)
       new_watch = Watch.new(@run_loop)
-      derefed = new_watch.waiting_for_authentication
 
       var_run_secrets_k8s_token_path = '/var/run/secrets/kubernetes.io/serviceaccount/token'
       var_run_secrets_k8s_crt_path = '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt'
@@ -35,6 +34,7 @@ module Bespoked
         http_ok = http_parser.status_code.to_i == 200
         #@run_loop.log(:warn, :got_watch_headers, [http_ok])
         #defer.resolve(http_ok)
+        derefed = new_watch.waiting_for_authentication
         derefed.resolve(http_ok)
       end
 

@@ -21,8 +21,8 @@ module Bespoked
                   :heartbeat,
                   :tls_controller
 
-    RECONNECT_WAIT = 60000
-    FAILED_TO_AUTH_TIMEOUT = 50000
+    RECONNECT_WAIT = 600000
+    FAILED_TO_AUTH_TIMEOUT = 500000
     RELOAD_TIMEOUT = 100
 
     KINDS = ["pod", "service", "ingress", "endpoint", "secret"]
@@ -98,7 +98,6 @@ module Bespoked
     def install_ingress_into_proxy_controller
       if ingress_descriptions = @descriptions["ingress"]
         self.record :info, :install_ingress, ingress_descriptions
-
         @proxy_controller.install(ingress_descriptions)
       end
     end
@@ -160,7 +159,7 @@ module Bespoked
       if reconnect_wait
         @reconnect_timer.start(0, reconnect_wait)
       else
-        @reconnect_timer.start(0)
+        @reconnect_timer.start(0, RECONNECT_WAIT)
       end
 
       yield if block_given?
