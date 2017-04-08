@@ -75,7 +75,7 @@ module Bespoked
 
         handle_client(defer_until_after_body, client, 0)
       end
-      record :server_bound, [self.class, app_in]
+      #record :server_bound, [self.class, app_in]
     end
 
     def record(level = nil, name = nil, message = nil)
