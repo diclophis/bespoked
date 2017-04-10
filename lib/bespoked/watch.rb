@@ -19,9 +19,6 @@ class Watch
     self.json_parser = Yajl::Parser.new
     json_parser.on_parse_complete = @on_event_cb
 
-    #proc do |event|
-    #end
-
     self.waiting_for_authentication = @run_loop.defer
     self.waiting_for_authentication_promise = @waiting_for_authentication.promise
   end

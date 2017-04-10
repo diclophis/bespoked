@@ -43,22 +43,24 @@ module Bespoked
     def extract_vhosts(description)
       ingress_name = self.extract_name(description)
       spec_rules = description["spec"]["rules"]
-      spec_tls = description["spec"]["tls"]
 
       #TODO: refactor this elsewhere, maybe
-			if spec_tls && spec_tls.length > 0
-				spec_tls.each do |hosts_and_secret|
-					list_of_hosts = hosts_and_secret["hosts"]
-          secret_name = hosts_and_secret["secretName"]
-          tls_secret = @entry_point.locate_secret(secret_name)
-          data = tls_secret["data"] # has_keys? tls.crt, tls.key
+      if false
+        spec_tls = description["spec"]["tls"]
+        if spec_tls && spec_tls.length > 0
+          spec_tls.each do |hosts_and_secret|
+            list_of_hosts = hosts_and_secret["hosts"]
+            secret_name = hosts_and_secret["secretName"]
+            tls_secret = @entry_point.locate_secret(secret_name)
+            data = tls_secret["data"] # has_keys? tls.crt, tls.key
 
-          list_of_hosts.each do |host|
-            @entry_point.record :info, :tls, [list_of_hosts, host, data.keys].inspect
-            self.add_tls_host(Base64.decode64(data["tls.key"]), Base64.decode64(data["tls.crt"]), host)
+            list_of_hosts.each do |host|
+              @entry_point.record :info, :tls, [list_of_hosts, host, data.keys].inspect
+              self.add_tls_host(Base64.decode64(data["tls.key"]), Base64.decode64(data["tls.crt"]), host)
+            end
           end
         end
-			end
+      end
 
       vhosts = []
 

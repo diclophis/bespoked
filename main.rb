@@ -20,7 +20,7 @@ run_loop.run do |exception_handler|
   #  stdout_pipe.write($/)
   #end
 
-puts "wtf"
+  #puts "wtf"
 
   exception_handler.notifier do |error, message, trace|
     logger.notify({:lineno => :main, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})

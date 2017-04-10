@@ -5,16 +5,18 @@ module Bespoked
     attr_accessor :run_loop,
                   :rack_server,
                   :proxy_controller,
-                  :challenges
+                  :challenges,
+                  :logger
 
     def initialize(run_loop_in, logger_in, proxy_controller_in)
-      #, challenge, authorization)
-      self.challenges = {}
-      @logger = logger_in
+      self.logger = logger_in
       self.run_loop = run_loop_in
       self.proxy_controller = proxy_controller_in
       self.rack_server = LibUVRackServer.new(@run_loop, logger_in, method(:handle_request), {:Port => 55101})
 
+      self.challenges = {}
+
+=begin
       # We're going to need a private key.
       private_key = OpenSSL::PKey::RSA.new(4096)
 
@@ -34,6 +36,7 @@ module Bespoked
 
       # You may need to agree to the terms of service (that's up the to the server to require it or not but boulder does by default)
       @logger.puts registration.agree_terms
+=end
     end
 
     def install_tls_registration(dns)
@@ -109,7 +112,7 @@ module Bespoked
 
     if challenge = @challenges[env["PATH_INFO"]]
       @logger.puts challenge.authorization.verify_status # => 'pending'
-      @logger.puts env.inspect
+      #@logger.puts env.inspect
       ['200', {'Content-Type' => challenge.content_type}, [challenge.file_content]]
     else
       ['200', {'Content-Type' => "text/plain"}, ["OK"]]

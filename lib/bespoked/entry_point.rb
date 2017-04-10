@@ -177,16 +177,22 @@ module Bespoked
     end
 
     def resolve_authentication!(proceed = nil)
+      self.record :info, :resolved_auth, []
+
       @failure_to_auth_timer.stop
       @authenticated = true
     end
 
     def connect(proceed)
+      self.record :info, :connect_001, []
+
       @watches.each do |watch|
         watch.restart
       end
 
       promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }.compact
+
+      self.record :info, :connect_002, []
 
       if promises.length > 0
         self.record :info, :connect, promises

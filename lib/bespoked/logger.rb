@@ -5,30 +5,30 @@ module Bespoked
     def initialize(io)
       @io = io
       $global_logger = self
-      $stdout.puts "??2"
+      #$stdout.puts "??2"
     end
 
     def start(run_loop)
-      $stdout.puts "??3"
+      #$stdout.puts "??3"
       @stdout_pipe = run_loop.pipe
       @stdout_pipe.open(@io.fileno)
 
       @libuv_logger = run_loop.defer
       @libuv_logger.promise.progress do |log_entry|
-      $stdout.puts "??"
+      #$stdout.puts "??"
       @stdout_pipe.write(log_entry)
       @stdout_pipe.write($/)
       end
     end
 
     def add(sev, thing, msg)
-        $stdout.puts "??5#{msg}"
+      #$stdout.puts "??5#{msg}"
       @libuv_logger.notify(msg)
       false
     end
 
     def notify(*args)
-        $stdout.puts "??4"
+      #$stdout.puts "??4"
       add(1, nil, args.inspect)
     end
 
