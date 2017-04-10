@@ -8,7 +8,7 @@ spec:
   # The default backend must be of type NodePort.
   type: NodePort
   ports:
-  - nodePort: 80
+  - nodePort: 30080
     port: 55101
     targetPort: 55101
     protocol: TCP
@@ -56,6 +56,76 @@ spec:
 #    k8s-app: bespoked
 ---
 apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ingress-controller
+  namespace: default
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: ingress-controller
+  namespace: default
+rules:
+- apiGroups:
+  - ""
+  - "extensions"
+  resources:
+  - configmaps
+  - secrets
+  - services
+  - endpoints
+  - ingresses
+  - nodes
+  - pods
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - "extensions"
+  - ""
+  resources:
+  - ingresses
+  - ingresses/status
+  verbs:
+  - get
+  - update
+  - create
+  - list
+  - patch
+  - delete
+  - watch
+- apiGroups:
+  - "*"
+  - ""
+  resources:
+  - events
+  - certificates
+  - secrets
+  verbs:
+  - create
+  - list
+  - update
+  - get
+  - patch
+  - watch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: ingress-controller
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    namespace: default
+    name: ingress-controller
+roleRef:
+  kind: ClusterRole
+  name: ingress-controller
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
 kind: ReplicationController
 metadata:
   name: bespoked-replication-controller
@@ -76,7 +146,7 @@ spec:
         version: rv1 #NOTE: this is re-written
     spec:
       terminationGracePeriodSeconds: 600
-      serviceAccount: default
+      serviceAccount: ingress-controller
       containers:
       - image: #NOTE: this is re-written via manifest.rb
         imagePullPolicy: IfNotPresent
