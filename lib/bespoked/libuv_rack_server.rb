@@ -63,19 +63,19 @@ module Bespoked
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       @server.catch do |reason|
-        record :debug, :rack_server_catch, [reason]
+        #record :debug, :rack_server_catch, [reason]
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
         defer_until_after_body = @run_loop.defer
         defer_until_after_body.promise.progress do |request_depth|
-          record :try_to_recurse, []
+          #record :try_to_recurse, []
           #handle_client(defer_until_after_body, client, request_depth)
         end
 
         handle_client(defer_until_after_body, client, 0)
       end
-      record :server_bound, [self.class, app_in]
+      #record :server_bound, [self.class, app_in]
     end
 
     def record(level = nil, name = nil, message = nil)
@@ -188,7 +188,7 @@ module Bespoked
     end
 
     def handle_client(retry_defer, client, request_depth)
-      record :handle_client, []
+      #record :handle_client, []
 
       outer_io = StringIO.new
       outer_io.set_encoding('ASCII-8BIT')
@@ -214,7 +214,7 @@ module Bespoked
 
       # HTTP headers available
       outer_http_parser.on_headers_complete = proc do
-        record :on_headers, [outer_http_parser.headers]
+        #record :on_headers, [outer_http_parser.headers]
       end
 
       ##################

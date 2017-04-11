@@ -20,18 +20,18 @@ module Bespoked
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       @server.catch do |reason|
-        record :info, :libuv_http_proxy_server_catch, [reason].inspect
+        #record :info, :libuv_http_proxy_server_catch, [reason].inspect
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
         handle_client(client)
       end
 
-      record :debug, :http_proxy_server_listen, [options].inspect
+      #record :debug, :http_proxy_server_listen, [options].inspect
     end
 
     def add_tls_host(private_key, cert_chain, host_name)
-      record :info, :add_tls_host, [private_key, cert_chain, host_name].inspect
+      #record :info, :add_tls_host, [private_key, cert_chain, host_name].inspect
 
       temp_key = Tempfile.new('bespoked-tls-key')
       key_path = temp_key.path + ".keep"
@@ -71,7 +71,7 @@ module Bespoked
     end
 
     def handle_client(client)
-      record :debug, :start_handle_client, [client].inspect
+      #record :debug, :start_handle_client, [client].inspect
       install_shutdown_promise(client)
 
       http_parser = Http::Parser.new
@@ -85,17 +85,17 @@ module Bespoked
       end
 
       new_client.finally do |err|
-        record :debug, :upstream_server_closed, [err, err.class].inspect
+        #record :debug, :upstream_server_closed, [err, err.class].inspect
         sp = install_shutdown_promise(client)
-        record :debug, :sp_one, [client.class, client].inspect
+        #record :debug, :sp_one, [client.class, client].inspect
         sp.promise.progress do
-          record :info, :upstream_server_closed_and_closed, []
+          #record :info, :upstream_server_closed_and_closed, []
           client.close
         end
       end
 
       client.progress do |chunk|
-        record :debug, :progress, [chunk].inspect
+        #record :debug, :progress, [chunk].inspect
         if reading_state == :request_to_upstream
           if new_client && chunk && chunk.length > 0
             new_client.write(chunk)
@@ -151,25 +151,25 @@ module Bespoked
       ##################
 
       #TODO: determine how to switch here based on if this is the ssl one or not...
-      tls_options = {
-        :server => true,
-        :verify_peer => false
-      }
-      client.start_tls(tls_options)
+      #tls_options = {
+      #  :server => true,
+      #  :verify_peer => false
+      #}
+      #client.start_tls(tls_options)
       client.start_read
     end
 
     def write_chunk_to_socket(client, chunk)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a|
-          record :info, :proxy_wrote_write_chunk_to_socket, []
+          #record :info, :proxy_wrote_write_chunk_to_socket, []
           install_shutdown_promise(client).promise.progress do
-            record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
+            #record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
           end
           install_shutdown_promise(client).notify
         }.catch { |e|
           should_close = e.is_a?(Libuv::Error::ECANCELED)
-          record :info, :proxy_write_error, [e, should_close].inspect
+          #record :info, :proxy_write_error, [e, should_close].inspect
           client.close if should_close
         }
       end
@@ -227,7 +227,7 @@ module Bespoked
         request_to_upstream.concat(body_left_over)
       end
 
-      record :debug, :headers_for_upstream_request, [headers_for_upstream_request].inspect
+      #record :debug, :headers_for_upstream_request, [headers_for_upstream_request].inspect
 
       request_to_upstream
     end
@@ -255,10 +255,10 @@ module Bespoked
       # record :debug, :halt_connection, [reason].inspect
       response = reason.to_s
       client.write("HTTP/1.1 #{status} Halted\r\nConnection: close\r\nContent-Length: #{response.length}\r\n\r\n#{response}", {:wait => :promise}).then {
-        record :debug, :wrote_halted_and_closed
+        #record :debug, :wrote_halted_and_closed
         client.close
       }.catch { |e|
-        record :info, :wrote_halted_catch, [e].inspect
+        #record :info, :wrote_halted_catch, [e].inspect
         client.close
       }
       :stop
