@@ -7,29 +7,38 @@ metadata:
   name: bespoked-service
   namespace: default
 spec:
-  type: LoadBalancer
-  ## The default backend must be of type NodePort.
-  #type: NodePort
-  #ports:
-  #- nodePort: 30080
-  #  port: 55101
-  #  targetPort: 55101
-  #  protocol: TCP
-  #  name: http-lets-encrypt
-  #- nodePort: 30001
-  #  port: 55001
-  #  targetPort: 55001
-  #  protocol: TCP
-  #  name: http
   selector:
     k8s-app: bespoked
+  #type: NodePort
+  type: LoadBalancer
   ports:
-  - name: http
+  - nodePort: 30080
     port: 80
-    targetPort: tls-incoming
-  - name: https
-    port: 443
     targetPort: ing-incoming
+    protocol: TCP
+  #ports:
+  #- name: http
+  #  port: 80
+  #  targetPort: ing-incoming
+  ### The default backend must be of type NodePort.
+  ##type: NodePort
+  ##ports:
+  ##- nodePort: 30080
+  ##  port: 55101
+  ##  targetPort: 55101
+  ##  protocol: TCP
+  ##  name: http-lets-encrypt
+  ##- nodePort: 30001
+  ##  port: 55001
+  ##  targetPort: 55001
+  ##  protocol: TCP
+  ##  name: http
+  ##- name: http
+  ##  port: 80
+  ##  targetPort: tls-incoming
+  ##- name: https
+  ##  port: 443
+  ##  targetPort: ing-incoming
 
 #apiVersion: v1
 #kind: Service
