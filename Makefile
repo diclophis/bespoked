@@ -12,9 +12,12 @@ $(shell mkdir -p $(BUILD))
 MANIFEST_TMP=$(BUILD)/manifest.yml
 
 #.INTERMEDIATE: $(MANIFEST_TMP)
-.PHONY: image uninstall clean
+.PHONY: image uninstall clean test
 
 all: $(BUILD)/$(IMAGE_TAG) install
+
+test:
+	bundle exec rake test
 
 image:
 	docker build -f Dockerfile.bespoked -t $(IMAGE) .
