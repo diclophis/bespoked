@@ -41,11 +41,20 @@ Connection: keep-alive
     }
 
     @called_upstream = 0
-    @mock_upstream_app = Rack::Lint.new(proc { |env|
+    @got_data = 0
+    @times = 2 * 1024 * 1024
+    @t = "0"
+    @length = @t.length
+
+    @content = [@t] * @times
+    @content_length = 0
+    @content.each do |chunk|
+      @content_length += chunk.length
+    end
+
+    @mock_upstream_app = (proc { |env|
       @called_upstream += 1
-      ##[200, {"Content-Type" => "text"}, ["example rack handler"]]
-      #@logger.puts [:app_set_upstream, @called_upstream].inspect
-      [200, {"Content-Type" => "text/event-stream"}, ["example rack handler"]]
+      [200, {"Content-Type" => "text/plain", "Content-Length" => @content_length.to_s}, @content]
     })
 
     @logger = Bespoked::Logger.new(STDERR)
@@ -76,30 +85,49 @@ Connection: keep-alive
     end
   end
 
-#< HTTP/1.1 302 Moved Temporarily
-#< Server: nginx
-#< Date: Tue, 29 Nov 2016 03:23:25 GMT
-#< Content-Type: text/html
-#< Connection: keep-alive
-#< Content-Length: 154
-#< Location: https://medium.com/foo/@mavenlink
-
   describe "http proxy service" do
     it "redirects and proxies all requests to an upstream http server" do
+
       @run_loop.run do
         @mock_upstream_server.start
         @http_proxy_server.start
       
         client = @run_loop.tcp
 
+        http_parser = Http::Parser.new
+        http_parser.on_headers_complete = proc do
+          #@logger.puts [:http_parser, http_parser.inspect, http_parser.headers]
+
+          if http_parser.upgrade_data && http_parser.upgrade_data.length > 0
+            #request_to_upstream.concat(http_parser.upgrade_data)
+            #@logger.puts [:http_parser_upgrade_data, http_parser.upgrade_data]
+          end
+        end
+
+        http_parser.on_body = proc do |chunk|
+          # One chunk of the body
+          #@logger.puts [:on_body, chunk.length]
+          @got_data += chunk.length
+        end
+
+        http_parser.on_message_complete = proc do |env|
+          # Headers and body is all parsed
+          if @got_data == (@length * @times * 2)
+            #@logger.puts [:on_complete, env.inspect, @got_data]
+            client.close
+          end
+        end
+
         client.catch do |reason|
           @logger.puts [:client_caught_exception, reason]
         end
 
-        client.progress do |data|
-          #@logger.puts [:called_upstream, @called_upstream].inspect
-          if @called_upstream > 0
-            client.close
+        client.progress do |chunk|
+          #@logger.puts [:called_upstream, @called_upstream, chunk.length, @got_data].inspect
+
+          if chunk && chunk.length > 0
+            offset_of_body_left_in_buffer = http_parser << chunk
+            body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
           end
         end
 
@@ -120,6 +148,7 @@ Connection: keep-alive
       end
 
       @called_upstream.must_equal 2
+      @got_data.must_equal ((@length * @times * 2))
     end
   end
 end
