@@ -10,16 +10,6 @@ logger = Bespoked::Logger.new(STDERR)
 logger.start(run_loop)
 
 run_loop.run do |exception_handler|
-  #LOGGING
-  #stdout_pipe = run_loop.pipe
-  #stdout_pipe.open($stdout.fileno)
-
-  #logger = run_loop.defer
-  #logger.promise.progress do |log_entry|
-  #  stdout_pipe.write(Yajl::Encoder.encode(log_entry))
-  #  stdout_pipe.write($/)
-  #end
-
   exception_handler.notifier do |error, message, trace|
     logger.notify({:lineno => :main, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})
   end
@@ -30,8 +20,8 @@ run_loop.run do |exception_handler|
     logger,
     ["ingresses", "services", "pods", "secrets"],
     {
-    "proxy-controller-factory-class" => ENV["BESPOKED_PROXY_CLASS"],
-    "watch-factory-class" => ENV["BESPOKED_WATCH_CLASS"]
+      "proxy-controller-factory-class" => ENV["BESPOKED_PROXY_CLASS"],
+      "watch-factory-class" => ENV["BESPOKED_WATCH_CLASS"]
     }
   )
 
@@ -50,13 +40,6 @@ run_loop.run do |exception_handler|
   run_loop.signal(15) do |_sigint|
     bespoked.halt :run_loop_terminated
   end
-
-  #run_loop.prepare {
-  #  if bespoked.stopping
-  #    #TODO: this should maybe not be needed if we clean up everything ok?
-  #    run_loop.stop
-  #  end
-  #}.start
 
   bespoked.run_ingress_controller
 end

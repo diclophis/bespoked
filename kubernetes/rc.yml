@@ -13,9 +13,25 @@ spec:
   type: LoadBalancer
   ports:
   - nodePort: 30080
-    port: 80
+    port: 180
+    targetPort: tls-incoming
+    protocol: TCP
+    name: lets-encrypt-comms
+  - nodePort: 30088
+    port: 188
+    targetPort: dash-incoming
+    protocol: TCP
+    name: public-stats-comms
+  - nodePort: 30443
+    port: 443
     targetPort: ing-incoming
     protocol: TCP
+    name: kubernetes-ingress-comms
+  - nodePort: 30444
+    port: 444
+    targetPort: ingtls-incoming
+    protocol: TCP
+    name: lets-encrypt-ingress-comms
   #ports:
   #- name: http
   #  port: 80
@@ -198,6 +214,8 @@ spec:
           containerPort: 55002
         - name: tls-incoming
           containerPort: 55101
+        - name: ingtls-incoming
+          containerPort: 55102
         livenessProbe:
           httpGet:
             path: /healthz

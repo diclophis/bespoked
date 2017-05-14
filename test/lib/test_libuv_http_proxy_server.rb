@@ -41,12 +41,12 @@ Connection: keep-alive
     }
 
     @called_upstream = 0
-    @mock_upstream_app = proc { |env|
-      #[200, {"Content-Type" => "text"}, ["example rack handler"]]
+    @mock_upstream_app = Rack::Lint.new(proc { |env|
       @called_upstream += 1
-      @logger.puts [:app_set_upstream, @called_upstream].inspect
+      ##[200, {"Content-Type" => "text"}, ["example rack handler"]]
+      #@logger.puts [:app_set_upstream, @called_upstream].inspect
       [200, {"Content-Type" => "text/event-stream"}, ["example rack handler"]]
-    }
+    })
 
     @logger = Bespoked::Logger.new(STDERR)
     @logger.start(@run_loop)
@@ -93,12 +93,11 @@ Connection: keep-alive
         client = @run_loop.tcp
 
         client.catch do |reason|
-          #client.shutdown
-          @logger.puts [:wtf, reason]
+          @logger.puts [:client_caught_exception, reason]
         end
 
         client.progress do |data|
-          @logger.puts [:called_upstream, @called_upstream].inspect
+          #@logger.puts [:called_upstream, @called_upstream].inspect
           if @called_upstream > 0
             client.close
           end
@@ -106,19 +105,16 @@ Connection: keep-alive
 
         # close the handle
         client.finally do
+          #@logger.puts [:finally]
           @run_loop.stop
         end
 
-
         client.connect(Bespoked::DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]) do
-        #@logger.puts [:wrote_reqs, @called_upstream].inspect
-        #@logger.puts [:wtf, Bespoked::DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]].inspect
-          client.start_tls
+          #client.start_tls
           client.start_read
 
           client.write(MOCK_HTTP_REQUEST, {:wait => :promise}).then { |a|
-            @logger.puts [:wrote_reqs, @called_upstream].inspect
-            client.close
+            #@logger.puts [:wrote_reqs, @called_upstream].inspect
           }
         end
       end
