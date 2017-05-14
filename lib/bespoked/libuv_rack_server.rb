@@ -183,6 +183,7 @@ module Bespoked
       status, headers, body = @app.call(env)
 
       crang(nil, client, status, headers, body, env).promise.progress do |sdsd|
+        #WTF?
         callback_defer.close
       end
     end
@@ -273,11 +274,11 @@ module Bespoked
     def thang(client, chunk, keep_alive, wrote_defer)
       if client && chunk && chunk.length > 0
         client.write(chunk, {:wait => :promise}).then { |a|
-          client.close unless keep_alive
+          #client.close unless keep_alive
           wrote_defer.notify(:step)
         }.catch { |e|
-          should_close = e.is_a?(Libuv::Error::ECANCELED)
-          client.close if should_close
+          #should_close = e.is_a?(Libuv::Error::ECANCELED)
+          #client.close if should_close
         }
       end
     end

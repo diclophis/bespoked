@@ -90,7 +90,8 @@ module Bespoked
         #record :debug, :sp_one, [client.class, client].inspect
         sp.promise.progress do
           #record :info, :upstream_server_closed_and_closed, []
-          client.close
+          #this possibly breaks response on upload
+          #client.close
         end
       end
 
@@ -168,9 +169,9 @@ module Bespoked
           end
           install_shutdown_promise(client).notify
         }.catch { |e|
-          should_close = e.is_a?(Libuv::Error::ECANCELED)
+          #should_close = e.is_a?(Libuv::Error::ECANCELED)
           #record :info, :proxy_write_error, [e, should_close].inspect
-          client.close if should_close
+          #client.close if should_close
         }
       end
     end
