@@ -6,7 +6,7 @@ metadata:
     #service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
     service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-west-1:214670627126:certificate/8eba4e40-2eb5-459b-8c97-c97b71f62f5c
     service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
-    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    #service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
   name: bespoked-service
   namespace: default
 spec:
@@ -37,6 +37,11 @@ spec:
     targetPort: ingtls-incoming
     protocol: TCP
     name: lets-encrypt-ingress-comms
+
+  - port: 32100
+    targetPort: 32100
+    protocol: TCP
+    name: attalos-bosh-comms
 ---
 apiVersion: v1
 kind: ServiceAccount

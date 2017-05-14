@@ -125,7 +125,7 @@ module Bespoked
 
           #TODO: make this not a super-nested proc somehow
           if url
-            host = "%s.default.svc.%s" % [url.host, "bardin.haus"]
+            host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
             port = url.port
 
             on_dns_bad = proc { |err|
