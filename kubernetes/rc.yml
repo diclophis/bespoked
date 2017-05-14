@@ -3,114 +3,40 @@ kind: Service
 apiVersion: v1
 metadata:
   annotations:
-    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
+    #service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-west-1:214670627126:certificate/8eba4e40-2eb5-459b-8c97-c97b71f62f5c
+    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
   name: bespoked-service
   namespace: default
 spec:
   selector:
     k8s-app: bespoked
-  #type: NodePort
   type: LoadBalancer
   ports:
   - nodePort: 30080
-    port: 180
+    port: 80
     targetPort: tls-incoming
     protocol: TCP
     name: lets-encrypt-comms
+
   - nodePort: 30088
-    port: 188
+    port: 88
     targetPort: dash-incoming
     protocol: TCP
     name: public-stats-comms
+
   - nodePort: 30443
     port: 443
     targetPort: ing-incoming
     protocol: TCP
     name: kubernetes-ingress-comms
+
   - nodePort: 30444
     port: 444
     targetPort: ingtls-incoming
     protocol: TCP
     name: lets-encrypt-ingress-comms
-  #ports:
-  #- name: http
-  #  port: 80
-  #  targetPort: ing-incoming
-  ### The default backend must be of type NodePort.
-  ##type: NodePort
-  ##ports:
-  ##- nodePort: 30080
-  ##  port: 55101
-  ##  targetPort: 55101
-  ##  protocol: TCP
-  ##  name: http-lets-encrypt
-  ##- nodePort: 30001
-  ##  port: 55001
-  ##  targetPort: 55001
-  ##  protocol: TCP
-  ##  name: http
-  ##- name: http
-  ##  port: 80
-  ##  targetPort: tls-incoming
-  ##- name: https
-  ##  port: 443
-  ##  targetPort: ing-incoming
-
-#apiVersion: v1
-#kind: Service
-#metadata:
-#  name: bespoked-service
-#  namespace: default
-#spec:
-#  # The default backend must be of type NodePort.
-#  type: NodePort
-#  ports:
-#  - nodePort: 80
-#    port: 55101
-#    targetPort: 55101
-#    protocol: TCP
-#    name: http-lets-encrypt
-#  - nodePort: 30001
-#    port: 55001
-#    targetPort: 55001
-#    protocol: TCP
-#    name: http
-#  selector:
-#    k8s-app: bespoked
-#---
-#apiVersion: v1
-#kind: Service
-#metadata:
-#  name: bespoked-health-service
-#  namespace: default
-#spec:
-#  # The default backend must be of type NodePort.
-#  type: NodePort
-#  ports:
-#  - nodePort: 30002
-#    port: 8889
-#    targetPort: 8889
-#    protocol: TCP
-#    name: http
-#  selector:
-#    k8s-app: bespoked
-#---
-#apiVersion: v1
-#kind: Service
-#metadata:
-#  name: bespoked-dashboard-service
-#  namespace: default
-#spec:
-#  # The default backend must be of type NodePort.
-#  type: NodePort
-#  ports:
-#  - nodePort: 30003
-#    port: 8890
-#    targetPort: 8890
-#    protocol: TCP
-#    name: http
-#  selector:
-#    k8s-app: bespoked
 ---
 apiVersion: v1
 kind: ServiceAccount

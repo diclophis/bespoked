@@ -106,20 +106,28 @@ module Bespoked
     end
 
     def handle_request(env)
-  #while true
-    #puts "."
-    #@logger.puts "WTFFFFFF"
+      #while true
+      #puts "."
+      #@logger.puts "WTFFFFFF"
 
-    if challenge = @challenges[env["PATH_INFO"]]
-      @logger.puts challenge.authorization.verify_status # => 'pending'
-      #@logger.puts env.inspect
-      ['200', {'Content-Type' => challenge.content_type}, [challenge.file_content]]
-    else
-      ['200', {'Content-Type' => "text/plain"}, ["OK"]]
-    end
+      content = ["OK. use HTTPS\n"]
+      content_type = "text/plain"
+      content_length = 0
 
-	  # Wait a bit for the server to make the request, or just blink. It should be fast.
-	#  sleep(1)
+      if challenge = @challenges[env["PATH_INFO"]]
+        @logger.puts challenge.authorization.verify_status # => 'pending'
+        content_type = challenge.content_type
+        content = [challenge.file_content]
+      end
+
+      content.each do |chunk|
+        content_length += chunk.length
+      end
+
+      ['200', {'Content-Type' => content_type, 'Content-Length' => content_length.to_s, 'Connection' => 'close'}, content]
+
+# Wait a bit for the server to make the request, or just blink. It should be fast.
+#  sleep(1)
 
     # Rely on authorization.verify_status more than on challenge.verify_status,
     # if the former is 'valid' you can already issue a certificate and the status of
@@ -156,7 +164,6 @@ module Bespoked
 
 	## Optionally save the authorization URI for use at another time (eg: by a background job processor)
 	#File.write('authorization_uri', authorization.uri)
-
     end
   end
 end

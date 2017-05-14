@@ -220,6 +220,7 @@ module Bespoked
       ##################
 
       client.progress do |chunk|
+        record :client_progress, [chunk]
         offset_of_body_left_in_buffer = outer_http_parser << chunk
       end
 

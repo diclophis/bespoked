@@ -125,11 +125,11 @@ module Bespoked
 
           #TODO: make this not a super-nested proc somehow
           if url
-            host = url.host
+            host = "%s.default.svc.%s" % [url.host, "bardin.haus"]
             port = url.port
 
             on_dns_bad = proc { |err|
-              halt_connection(client, 404, :bad_dns)
+              halt_connection(client, 404, [:bad_dns, host, port])
             }
 
             on_dns_ok = proc { |addrinfo|
