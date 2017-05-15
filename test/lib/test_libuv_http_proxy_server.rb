@@ -57,8 +57,8 @@ Connection: keep-alive
       [200, {"Content-Type" => "text/plain", "Content-Length" => @content_length.to_s}, @content]
     })
 
-    @logger = Bespoked::Logger.new(STDERR)
-    @logger.start(@run_loop)
+    @logger = Bespoked::Logger.new(STDERR, @run_loop)
+    @logger.start
     @mock_upstream_server = Bespoked::LibUVRackServer.new(@run_loop, @logger, @mock_upstream_app, @mock_upstream_options)
 
     @mock_proxy_controller = Bespoked::ProxyController.new(@run_loop, nil)

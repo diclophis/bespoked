@@ -12,7 +12,7 @@ module Bespoked
       self.logger = logger_in
       self.run_loop = run_loop_in
       self.proxy_controller = proxy_controller_in
-      self.rack_server = LibUVRackServer.new(@run_loop, logger_in, method(:handle_request), {:Port => 55101})
+      self.rack_server = LibUVRackServer.new(@run_loop, @logger, method(:handle_request), {:Port => 55101})
 
       self.challenges = {}
 
@@ -106,16 +106,14 @@ module Bespoked
     end
 
     def handle_request(env)
-      #while true
-      #puts "."
-      #@logger.puts "WTFFFFFF"
-
-      content = ["OK. use HTTPS\n"]
-      content_type = "text/plain"
+      content_type = "text/html"
+      content = ["<!doctype html><html lang=en><head><meta charset=utf-8><title>not-found</title></head><body><script>location.protocol = 'https';</script></body></html>"]
       content_length = 0
+      content_code = 404
 
       if challenge = @challenges[env["PATH_INFO"]]
         @logger.puts challenge.authorization.verify_status # => 'pending'
+        status_code = 200
         content_type = challenge.content_type
         content = [challenge.file_content]
       end
@@ -124,7 +122,7 @@ module Bespoked
         content_length += chunk.length
       end
 
-      ['200', {'Content-Type' => content_type, 'Content-Length' => content_length.to_s, 'Connection' => 'close'}, content]
+      [status_code.to_s, {'Content-Type' => content_type, 'Content-Length' => content_length.to_s, 'Connection' => 'close'}, content]
 
 # Wait a bit for the server to make the request, or just blink. It should be fast.
 #  sleep(1)

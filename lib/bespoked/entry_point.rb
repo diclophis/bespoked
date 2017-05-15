@@ -21,8 +21,8 @@ module Bespoked
                   :heartbeat,
                   :tls_controller
 
-    RECONNECT_WAIT = 6000
-    FAILED_TO_AUTH_TIMEOUT = 5000
+    RECONNECT_WAIT = 2000
+    FAILED_TO_AUTH_TIMEOUT = 60000
     RELOAD_TIMEOUT = 100
 
     KINDS = ["pod", "service", "ingress", "endpoint", "secret"]
@@ -51,12 +51,14 @@ module Bespoked
     end
 
     def initialize(run_loop_in, logger_in, list_of_resources_to_watch = [], options = {})
-      self.run_loop = run_loop_in
-      self.logger = logger_in
-
+      self.watches = []
       self.descriptions = {}
       self.authenticated = false
       self.stopping = false
+
+      self.run_loop = run_loop_in
+      self.logger = logger_in
+      @list_of_resources_to_watch = list_of_resources_to_watch
 
       self.proxy_controller_factory_class = Bespoked.const_get(options["proxy-controller-factory-class"] || "RackProxyController")
       self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self)
@@ -68,15 +70,24 @@ module Bespoked
       self.health_controller = Bespoked::HealthController.new(@run_loop, @logger)
       self.dashboard_controller = Bespoked::DashboardController.new(@run_loop, @logger, @proxy_controller)
       self.tls_controller = Bespoked::TlsController.new(@run_loop, @logger, proxy_controller)
+    end
 
-      self.watches = []
+    def halt(message)
+      @stopping = true
+      @failure_to_auth_timer.stop if failure_to_auth_timer
 
-      list_of_resources_to_watch.collect do |resource_to_watch|
-        self.record :info, :creating_watch, [resource_to_watch]
+      @proxy_controller.shutdown
+      @health_controller.shutdown
+      @dashboard_controller.shutdown
+      @tls_controller.shutdown
+      @logger.shutdown
 
-        new_watch = @watch_factory.create(resource_to_watch)
-        self.install_watch(new_watch)
+      #puts @watches.inspect
+      @watches.each do |watch|
+        watch.shutdown
       end
+
+      #puts (@run_loop.instance_variable_get(:@run_queue).deq).inspect
     end
 
     def add_tls_host(private_key, cert_chain, host_name)
@@ -89,10 +100,12 @@ module Bespoked
     end
 
     def install_watch(new_watch)
-      new_watch.on_event do |event|
-        self.handle_event(event)
+      if new_watch
+        new_watch.on_event do |event|
+          self.handle_event(event)
+        end
+        self.watches << new_watch
       end
-      self.watches << new_watch
     end
 
     def install_ingress_into_proxy_controller
@@ -115,14 +128,6 @@ module Bespoked
       !@stopping
     end
 
-    def halt(message)
-      @stopping = true
-      @proxy_controller.shutdown
-      @health_controller.shutdown
-      @dashboard_controller.shutdown
-      @tls_controller.shutdown
-    end
-
     def on_failed_to_auth_cb
       self.record :info, :on_failed_to_auth_cb, []
 
@@ -136,9 +141,7 @@ module Bespoked
     end
 
     def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT, reconnect_wait = RECONNECT_WAIT)
-      self.record :info, :run_ingress_controller, []
-
-=begin
+      @logger.start
       @proxy_controller.start
       @health_controller.start
       @dashboard_controller.start
@@ -150,22 +153,28 @@ module Bespoked
       end
       @failure_to_auth_timer.start(fail_after_milliseconds, 0)
 
+      @list_of_resources_to_watch.collect do |resource_to_watch|
+        self.record :info, :creating_watch, [resource_to_watch]
+
+        new_watch = @watch_factory.create(resource_to_watch)
+        self.install_watch(new_watch)
+      end
+
       self.install_heartbeat
 
       self.prep_connect
 
-      self.reconnect_timer = @run_loop.timer
-      @reconnect_timer.progress do
+      #self.reconnect_timer = @run_loop.timer
+      #@reconnect_timer.progress do
         self.on_reconnect_cb
-      end
-
-      @reconnect_timer.start(0, reconnect_wait)
-
+      #end
+      #@reconnect_timer.start(0, reconnect_wait)
       #if reconnect_wait
       #else
       #  @reconnect_timer.start(0, RECONNECT_WAIT)
       #end
-=end
+
+      self.record :info, :run_ingress_controller, []
 
       yield if block_given?
     end
