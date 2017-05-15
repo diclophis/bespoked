@@ -41,5 +41,7 @@ run_loop.run do |exception_handler|
     bespoked.halt :run_loop_terminated
   end
 
-  bespoked.run_ingress_controller
+  #run_loop.next_tick do
+    bespoked.run_ingress_controller
+  #end
 end

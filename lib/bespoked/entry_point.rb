@@ -21,8 +21,8 @@ module Bespoked
                   :heartbeat,
                   :tls_controller
 
-    RECONNECT_WAIT = 600000
-    FAILED_TO_AUTH_TIMEOUT = 500000
+    RECONNECT_WAIT = 6000
+    FAILED_TO_AUTH_TIMEOUT = 5000
     RELOAD_TIMEOUT = 100
 
     KINDS = ["pod", "service", "ingress", "endpoint", "secret"]
@@ -62,7 +62,7 @@ module Bespoked
       self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self)
 
       self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "KubernetesApiWatchFactory")
-      self.watch_factory = @watch_factory_class.new(@run_loop)
+      self.watch_factory = @watch_factory_class.new(@run_loop, @logger)
 
       # fork these into sub processes?
       self.health_controller = Bespoked::HealthController.new(@run_loop, @logger)
@@ -138,6 +138,7 @@ module Bespoked
     def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT, reconnect_wait = RECONNECT_WAIT)
       self.record :info, :run_ingress_controller, []
 
+=begin
       @proxy_controller.start
       @health_controller.start
       @dashboard_controller.start
@@ -151,21 +152,27 @@ module Bespoked
 
       self.install_heartbeat
 
+      self.prep_connect
+
       self.reconnect_timer = @run_loop.timer
       @reconnect_timer.progress do
         self.on_reconnect_cb
       end
 
-      if reconnect_wait
-        @reconnect_timer.start(0, reconnect_wait)
-      else
-        @reconnect_timer.start(0, RECONNECT_WAIT)
-      end
+      @reconnect_timer.start(0, reconnect_wait)
+
+      #if reconnect_wait
+      #else
+      #  @reconnect_timer.start(0, RECONNECT_WAIT)
+      #end
+=end
 
       yield if block_given?
     end
 
     def install_heartbeat
+      self.record :info, :pre_install_hb, []
+
       self.heartbeat = @run_loop.timer
 
       @heartbeat.progress do
@@ -173,21 +180,21 @@ module Bespoked
 
         self.install_ingress_into_proxy_controller
       end
+
+      self.record :info, :installed_heartbeat, []
+
+      self.heartbeat
     end
 
-    def resolve_authentication!(proceed = nil)
+    def resolve_authentication!
       self.record :info, :resolved_auth, []
 
       @failure_to_auth_timer.stop
       @authenticated = true
     end
 
-    def connect(proceed)
-      self.record :info, :connect_001, []
-
-      @watches.each do |watch|
-        watch.restart
-      end
+    def prep_connect
+      self.record :info, :prep_connect, []
 
       promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }.compact
 
@@ -205,13 +212,26 @@ module Bespoked
           }
 
           if all_watches_authed_ok
-            self.resolve_authentication!(proceed)
+            self.resolve_authentication!
           end
         end
       end
     end
 
+    def connect(proceed)
+      self.record :info, :connect_001, [proceed]
+
+      @watches.each do |watch|
+        self.record :info, :watch_restart, [proceed]
+        watch.restart
+      end
+    end
+
     def handle_event(event)
+      #self.record :info, :handle_event, [event.inspect]
+
+      return unless event
+
       type = nil
       description = nil
 

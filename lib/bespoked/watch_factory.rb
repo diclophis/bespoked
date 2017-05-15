@@ -4,10 +4,18 @@ module Bespoked
   class WatchFactory
     DEBUG_WATCH_TIMEOUT = 30000
 
-    attr_accessor :run_loop
+    attr_accessor :run_loop,
+                  :logger
 
-    def initialize(run_loop_in)
+    def initialize(run_loop_in, logger_in)
       self.run_loop = run_loop_in
+      self.logger = logger_in
+    end
+
+    #TODO: make this an include moduled?
+    def record(level = nil, name = nil, message = nil)
+      log_event = {:date => Time.now, :level => level, :name => name, :message => message}
+      @logger.notify(log_event)
     end
 
     def create(resource_kind, authentication_timeout = 1)

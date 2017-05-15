@@ -202,10 +202,10 @@ module Bespoked
     end
 
     def construct_upstream_request(http_parser, client, body_left_over)
-      #request_to_upstream = String.new
       request_to_upstream = "#{http_parser.http_method} #{http_parser.request_url} HTTP/1.1\r\n"
 
       headers_for_upstream_request = header_stack(http_parser, client)
+
       headers_for_upstream_request.each { |k, vs|
         vs.split("\n").each { |v|
           if k && v

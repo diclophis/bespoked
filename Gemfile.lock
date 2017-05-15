@@ -8,10 +8,10 @@ GIT
 
 GIT
   remote: https://github.com/mavenlink/libuv.git
-  revision: 6a0e1f97b22c0665dafcb4e40d80aa50dca49c4c
-  branch: master
+  revision: 4f8055f8bf657ac9252058f53d7e982af3fd7bff
+  branch: with-updated-may
   specs:
-    libuv (3.1.4)
+    libuv (3.1.7)
       concurrent-ruby (~> 1.0)
       ffi (~> 1.9)
       ruby-tls (~> 2.1)
@@ -30,10 +30,10 @@ GEM
   specs:
     acme-client (0.5.5)
       faraday (~> 0.9, >= 0.9.1)
-    concurrent-ruby (1.0.4)
+    concurrent-ruby (1.0.5)
     faraday (0.11.0)
       multipart-post (>= 1.2, < 3)
-    ffi (1.9.17)
+    ffi (1.9.18)
     ffi-compiler (1.0.1)
       ffi (>= 1.0.0)
       rake
