@@ -54,7 +54,6 @@ module Bespoked
       self.watches = []
       self.descriptions = {}
       self.authenticated = false
-      self.stopping = false
 
       self.run_loop = run_loop_in
       self.logger = logger_in
@@ -73,8 +72,7 @@ module Bespoked
     end
 
     def halt(message)
-      @stopping = true
-      @failure_to_auth_timer.stop if failure_to_auth_timer
+      @failure_to_auth_timer.stop if @failure_to_auth_timer
 
       @proxy_controller.shutdown
       @health_controller.shutdown
@@ -82,12 +80,9 @@ module Bespoked
       @tls_controller.shutdown
       @logger.shutdown
 
-      #puts @watches.inspect
       @watches.each do |watch|
         watch.shutdown
       end
-
-      #puts (@run_loop.instance_variable_get(:@run_queue).deq).inspect
     end
 
     def add_tls_host(private_key, cert_chain, host_name)
@@ -110,7 +105,7 @@ module Bespoked
 
     def install_ingress_into_proxy_controller
       if ingress_descriptions = @descriptions["ingress"]
-        self.record :info, :install_ingress, ingress_descriptions
+        #self.record :info, :install_ingress, ingress_descriptions
         @proxy_controller.install(ingress_descriptions)
       end
     end
@@ -120,12 +115,9 @@ module Bespoked
       @checksum = Digest::MD5.hexdigest(Marshal.dump(@descriptions))
       changed = @checksum != old_checksum
 
-      self.record :info, :checksum, [old_checksum, @checksum] if changed
-      return changed
-    end
+      #self.record :info, :checksum, [old_checksum, @checksum] if changed
 
-    def running?
-      !@stopping
+      return changed
     end
 
     def on_failed_to_auth_cb
@@ -160,13 +152,15 @@ module Bespoked
         self.install_watch(new_watch)
       end
 
-      self.install_heartbeat
+      #self.install_heartbeat
 
       self.prep_connect
 
       #self.reconnect_timer = @run_loop.timer
       #@reconnect_timer.progress do
-        self.on_reconnect_cb
+
+      self.on_reconnect_cb
+
       #end
       #@reconnect_timer.start(0, reconnect_wait)
       #if reconnect_wait
@@ -182,9 +176,9 @@ module Bespoked
     def install_heartbeat
       self.record :info, :pre_install_hb, []
 
-      self.heartbeat = @run_loop.timer
+      self.heartbeat = @run_loop.defer
 
-      @heartbeat.progress do
+      @heartbeat.promise.progress do
         self.record :info, :heartbeat_progress, []
 
         self.install_ingress_into_proxy_controller
@@ -203,11 +197,11 @@ module Bespoked
     end
 
     def prep_connect
-      self.record :info, :prep_connect, []
+      #self.record :info, :prep_connect, []
 
       promises = @watches.collect { |watch| watch.waiting_for_authentication_promise }.compact
 
-      self.record :info, :connect_002, []
+      #self.record :info, :connect_002, []
 
       if promises.length > 0
         self.record :info, :connect, promises
@@ -228,10 +222,11 @@ module Bespoked
     end
 
     def connect(proceed)
-      self.record :info, :connect_001, [proceed]
+      #self.record :info, :connect_001, [proceed]
 
       @watches.each do |watch|
-        self.record :info, :watch_restart, [proceed]
+        #self.record :info, :watch_restart, [proceed]
+
         watch.restart
       end
     end
@@ -257,7 +252,7 @@ module Bespoked
 
         unless (kind == "Endpoints" && name == "kubernetes")
           #NOTE: kubernetes api-server endpoints are not logged, dont name your branch kubernetes
-          self.record :info, :event, [type, kind, name]
+          #self.record :info, :event, [type, kind, name]
         end
 
         case kind
@@ -304,8 +299,10 @@ module Bespoked
       end
 
       if self.recheck
-        @heartbeat.stop
-        @heartbeat.start(RELOAD_TIMEOUT, 0)
+        self.install_ingress_into_proxy_controller
+        #@heartbeat.stop
+        #@heartbeat.start(RELOAD_TIMEOUT, 0)
+        #@heartbeat.notify
       end
     end
 

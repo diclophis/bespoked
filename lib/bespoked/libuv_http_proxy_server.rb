@@ -80,10 +80,6 @@ module Bespoked
 
       new_client = run_loop.tcp
 
-      new_client.catch do |err|
-        halt_connection(client, 500, [err, err.backtrace, :proxy_client_error])
-      end
-
       new_client.finally do |err|
         #record :debug, :upstream_server_closed, [err, err.class].inspect
         sp = install_shutdown_promise(client)
@@ -111,6 +107,9 @@ module Bespoked
         end
       end
 
+      host = nil
+      port = nil
+
       http_parser.on_headers_complete = proc do
         reading_state = :request_to_upstream
 
@@ -120,8 +119,13 @@ module Bespoked
           in_url = URI.parse("http://" + env["HTTP_HOST"])
           url = nil
 
-          if mapped_host_port = @proxy_controller.vhosts[in_url.host]
-            url = URI.parse("http://" + mapped_host_port)
+          #[{:date=>2017-05-16 08:18:49 +0000, :level=>:debug, :name=>:up_up_up, :message=>"[[\"attalos-bosh.bardin.haus\", \"webdav.bardin.haus\", \"bardin.haus\", \"attalos.bardin.haus\"]]"}]
+          record :debug, :up_up_up, [@proxy_controller.vhosts.keys]
+
+          service_host, ip_address = @proxy_controller.vhosts[in_url.host]
+
+          if service_host && ip_address
+            url = URI.parse("http://" + service_host) #NOTE: wtf?
           end
 
           #TODO: make this not a super-nested proc somehow
@@ -129,16 +133,11 @@ module Bespoked
             host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
             port = url.port
 
-            on_dns_bad = proc { |err|
-              halt_connection(client, 404, [:bad_dns, host, port])
-            }
+            @run_loop.next_tick do
+              record :debug, :si, [host, port, ip_address]
 
-            on_dns_ok = proc { |addrinfo|
-              ip_address = addrinfo[0][0]
               do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
-            }
-
-            run_loop.lookup(host, :IPv4, 59, :wait => false).then(on_dns_ok, on_dns_bad)
+            end
 
             :stop
           else
@@ -157,6 +156,17 @@ module Bespoked
       #  :verify_peer => false
       #}
       #client.start_tls(tls_options)
+
+      new_client.catch do |err|
+        canceled_dns = err.is_a?(Libuv::Error::ECANCELED)
+        if canceled_dns
+          record :debug, :canceled_dns, [err].inspect
+          #try_dns_service_lookup.call
+        else
+          halt_connection(client, 500, [err, err.backtrace, :proxy_client_error])
+        end
+      end
+
       client.start_read
     end
 
@@ -186,7 +196,7 @@ module Bespoked
     def header_stack(http_parser, client)
       #NOTE: these header overrides are based on security recommendations
       proxy_override_headers = {
-        "X-Forwarded-For" => client.peername[1] || "", # NOTE: makes the actual IP available
+        "X-Forwarded-For" => client.peername[1] || "", # TODO: determine if this makes the actual IP available
         "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
         "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning... double check this
         "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
@@ -198,7 +208,11 @@ module Bespoked
         [k.slice(5, (k.length - 5)).split("_").map { |header| header.downcase.capitalize }.join("-"), v]
       }.to_h
 
-      http_parser.headers.merge(proxy_override_headers)
+      if http_parser.headers
+        http_parser.headers.merge(proxy_override_headers)
+      else
+        proxy_override_headers
+      end
     end
 
     def construct_upstream_request(http_parser, client, body_left_over)
@@ -247,7 +261,10 @@ module Bespoked
         write_chunk_to_socket(client, chunk) unless client.closed?
       })
 
+      #TODO: !!!! this can timeout !!!!!
       new_client.connect(ip_address, port.to_i, &proc {
+        record :debug, :connected_up, [ip_address].inspect
+
         other_twang(http_parser, new_client, client, body_left_over)
       })
     end
@@ -255,7 +272,7 @@ module Bespoked
     def halt_connection(client, status, reason)
       # record :debug, :halt_connection, [reason].inspect
       response = reason.to_s
-      client.write("HTTP/1.1 #{status} Halted\r\nConnection: close\r\nContent-Length: #{response.length}\r\n\r\n#{response}", {:wait => :promise}).then {
+      client.write("HTTP/1.1 #{status} Halted\r\nConnection: close\r\nX-Echo-Forwarded-For: TODO\r\nContent-Length: #{response.length}\r\n\r\n#{response}", {:wait => :promise}).then {
         #record :debug, :wrote_halted_and_closed
         client.close
       }.catch { |e|
