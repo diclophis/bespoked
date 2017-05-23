@@ -109,9 +109,13 @@ module Bespoked
       content_type = "text/html"
       content = ["<!doctype html><html lang=en><head><meta charset=utf-8><title>not-found</title></head><body><script>location.protocol = 'https';</script></body></html>"]
       content_length = 0
-      content_code = 404
+      status_code = 404
 
-      if challenge = @challenges[env["PATH_INFO"]]
+      #@logger.puts env.inspect
+
+      if env["PATH_INFO"] && env["PATH_INFO"].include?("healthz")
+        status_code = 200
+      elsif challenge = @challenges[env["PATH_INFO"]]
         @logger.puts challenge.authorization.verify_status # => 'pending'
         status_code = 200
         content_type = challenge.content_type

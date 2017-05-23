@@ -126,14 +126,14 @@ module Bespoked
       self.halt :no_ok_auth_failed
     end
 
-    def on_reconnect_cb
-      self.record :info, :on_reconnect_cb, []
+    #def on_reconnect_cb
+    #  self.record :info, :on_reconnect_cb, []
 
-      self.connect(nil)
-    end
+    #  self.connect(nil)
+    #end
 
     def run_ingress_controller(fail_after_milliseconds = FAILED_TO_AUTH_TIMEOUT, reconnect_wait = RECONNECT_WAIT)
-      @logger.start
+      #@logger.start #TODO: ??
       @proxy_controller.start
       @health_controller.start
       @dashboard_controller.start
@@ -146,7 +146,7 @@ module Bespoked
       @failure_to_auth_timer.start(fail_after_milliseconds, 0)
 
       @list_of_resources_to_watch.collect do |resource_to_watch|
-        self.record :info, :creating_watch, [resource_to_watch]
+        #self.record :info, :creating_watch, [resource_to_watch]
 
         new_watch = @watch_factory.create(resource_to_watch)
         self.install_watch(new_watch)
@@ -159,7 +159,7 @@ module Bespoked
       #self.reconnect_timer = @run_loop.timer
       #@reconnect_timer.progress do
 
-      self.on_reconnect_cb
+      self.connect(nil)
 
       #end
       #@reconnect_timer.start(0, reconnect_wait)
@@ -168,7 +168,7 @@ module Bespoked
       #  @reconnect_timer.start(0, RECONNECT_WAIT)
       #end
 
-      self.record :info, :run_ingress_controller, []
+      #self.record :info, :run_ingress_controller, []
 
       yield if block_given?
     end
@@ -204,10 +204,10 @@ module Bespoked
       #self.record :info, :connect_002, []
 
       if promises.length > 0
-        self.record :info, :connect, promises
+        #self.record :info, :connect, promises
 
         @run_loop.finally(*promises).then do |watch_authentication_promises|
-          self.record :info, :connect_finally, watch_authentication_promises
+          #self.record :info, :connect_finally, watch_authentication_promises
 
           all_watches_authed_ok = watch_authentication_promises.all? { |http_ok, resolved| 
             #each [result, wasResolved] value pair corresponding to a at the same index in the `promises` array.

@@ -2,17 +2,18 @@
 
 module Bespoked
   class KubernetesApiWatchFactory < WatchFactory
-    WATCH_TIMEOUT = 1000 * 30
+    WATCH_TIMEOUT = 100
 
     def rebop(retry_defer)
-      watch_timeout = @run_loop.timer
-      watch_timeout.progress do
-        self.record(:warn, :watch_timeout)
-        retry_defer.notify(true)
-      end
-      watch_timeout.start(WATCH_TIMEOUT, 0)
-      self.record(:warn, :rebop, [WATCH_TIMEOUT, watch_timeout])
-      watch_timeout
+      #watch_timeout = @run_loop.timer
+      #watch_timeout.progress do
+        #self.record(:warn, :watch_timeout)
+        #retry_defer.notify(true)
+        #nil
+      #end
+      #watch_timeout.start(WATCH_TIMEOUT, 0)
+      #self.record(:warn, :rebop, [WATCH_TIMEOUT, watch_timeout])
+      #watch_timeout
     end
 
     def create(resource_kind, authentication_timeout = 1)
@@ -56,12 +57,13 @@ module Bespoked
           derefed = new_watch.waiting_for_authentication
           derefed.resolve(http_ok)
           new_watch.rebop = rebop(retry_defer)
-          self.record(:info, :http_ok, http_ok)
+          #self.record(:info, :http_ok, http_ok)
         end
 
         # One chunk of the body
         http_parser.on_body = proc do |chunk|
           begin
+            #record(:debug, :watch_json, chunk)
             new_watch.json_parser << chunk
           rescue Yajl::ParseError => bad_json
             #@run_loop.log(:error, :bad_json, [bad_json, chunk])
@@ -74,7 +76,7 @@ module Bespoked
         #end
 
         new_client.connect(service_host, service_port.to_i) do |client|
-          self.record(:warn, :retry_defer_new_client_connected)
+          self.record(:warn, :watch_client_connected)
 
           client.start_tls({:server => false, :cert_chain => var_run_secrets_k8s_crt_path})
 
@@ -88,7 +90,7 @@ module Bespoked
           end
 
           client.finally do |finish|
-            self.record(:warn, :watch_disconnected, finish)
+            self.record(:warn, :watch_client_disconnected, finish)
             #new_watch.rebop = rebop(retry_defer)
           end
         

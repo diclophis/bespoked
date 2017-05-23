@@ -14,6 +14,7 @@ require 'config/environment'
 
 @run_loop.run do |exception_handler|
   @logger = Bespoked::Logger.new(STDERR, @run_loop)
+  @logger.start
 
   exception_handler.notifier do |error, message, trace|
     @logger.notify({:lineno => :main, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})

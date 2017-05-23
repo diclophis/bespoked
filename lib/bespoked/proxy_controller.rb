@@ -42,7 +42,7 @@ module Bespoked
 
           try_dns_service_lookup = proc {
             tried_dns += 1
-            @entry_point.record(:debug, :try_dns, host)
+            @entry_point.record(:debug, :try_dns, [host, service_name])
 
             dns_timer = @run_loop.timer
             dns_timer.progress do
@@ -81,6 +81,9 @@ module Bespoked
 
     def extract_vhosts(description)
       ingress_name = self.extract_name(description)
+
+      #.dig("object", "status", "containerStatuses").all? { |cs| cs.dig("ready") }
+
       spec_rules = description["spec"]["rules"]
 
       #TODO: refactor this elsewhere, maybe
@@ -125,7 +128,7 @@ module Bespoked
         end
       end
 
-      #@entry_point.record :info, :vhosts, vhosts
+      @entry_point.record :info, :vhosts, vhosts
 
       vhosts
     end

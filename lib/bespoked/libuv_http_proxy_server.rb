@@ -111,16 +111,18 @@ module Bespoked
       port = nil
 
       http_parser.on_headers_complete = proc do
+        handled = false
+
         reading_state = :request_to_upstream
 
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
 
         if env["HTTP_HOST"]
-          in_url = URI.parse("http://" + env["HTTP_HOST"])
           url = nil
+          in_url = URI.parse("http://" + env["HTTP_HOST"])
 
           #[{:date=>2017-05-16 08:18:49 +0000, :level=>:debug, :name=>:up_up_up, :message=>"[[\"attalos-bosh.bardin.haus\", \"webdav.bardin.haus\", \"bardin.haus\", \"attalos.bardin.haus\"]]"}]
-          record :debug, :up_up_up, [@proxy_controller.vhosts.keys]
+          #record :debug, :up_up_up, [@proxy_controller.vhosts.keys]
 
           service_host, ip_address = @proxy_controller.vhosts[in_url.host]
 
@@ -132,20 +134,20 @@ module Bespoked
           if url
             host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
             port = url.port
-
             @run_loop.next_tick do
-              record :debug, :si, [host, port, ip_address]
-
+              #record :debug, :si, [host, port, ip_address]
               do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
             end
 
-            :stop
-          else
-            halt_connection(client, 404, [:halted_lack_of_matching_service, @proxy_controller.vhosts.keys, in_url.host])
+            handled = true
           end
-        else
-          halt_connection(client, 404, :halted_lack_of_http_host)
         end
+
+        unless handled
+          halt_connection(client, 404, [:no_service_found, @proxy_controller.vhosts.keys, in_url.host])
+        end
+      
+        :stop
       end
 
       ##################

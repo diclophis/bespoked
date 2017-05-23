@@ -134,7 +134,7 @@ spec:
         k8s-app: bespoked
         version: rv1 #NOTE: this is re-written
     spec:
-      terminationGracePeriodSeconds: 600
+      terminationGracePeriodSeconds: 5
       serviceAccount: ingress-controller
       containers:
       - image: #NOTE: this is re-written via manifest.rb
@@ -148,16 +148,29 @@ spec:
           containerPort: 55101
         - name: ingtls-incoming
           containerPort: 55102
+        #livenessProbe:
+        #  exec:
+        #    command:
+        #    - /bin/true
+        #readinessProbe:
+        #  exec:
+        #    command:
+        #    - /bin/true
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 55101
+            scheme: HTTP
         livenessProbe:
           httpGet:
             path: /healthz
             port: 55101
             scheme: HTTP
-          initialDelaySeconds: 30
-          timeoutSeconds: 45
-          periodSeconds: 120
-          successThreshold: 1
-          failureThreshold: 128
+        #  #initialDelaySeconds: 30
+        #  #timeoutSeconds: 45
+        #  #periodSeconds: 120
+        #  #successThreshold: 1
+        #  #failureThreshold: 128
         env:
         - name: HTTP_X_FORWARDED_PROTO
           value: "https"
