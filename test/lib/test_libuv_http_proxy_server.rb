@@ -63,7 +63,7 @@ Connection: keep-alive
 
     @mock_proxy_controller = Bespoked::ProxyController.new(@run_loop, nil)
     @mock_proxy_controller.vhosts = {
-      "localhost" => "localhost:#{@mock_upstream_options[:Port]}"
+      "localhost" => ["localhost:#{@mock_upstream_options[:Port]}", "127.0.0.1"]
     }
 
     @http_proxy_server = Bespoked::LibUVHttpProxyServer.new(@run_loop, @logger, @mock_proxy_controller, @mock_instream_options)
