@@ -184,7 +184,8 @@ module Bespoked
 
       crang(nil, client, status, headers, body, env).promise.progress do |sdsd|
         #WTF?
-        callback_defer.close
+        client.close #unless keep_alive
+        #callback_defer.close
       end
     end
 
@@ -204,13 +205,16 @@ module Bespoked
       end
 
       outer_http_parser.on_message_complete = proc do |env|
-        callback = @run_loop.async do
-          foop(outer_http_parser, outer_io, client, callback, request_depth)
-        end
+        #callback = @run_loop.async do
+        callback = nil
 
-        @run_loop.work(proc {
-          callback.call
-        })
+          foop(outer_http_parser, outer_io, client, callback, request_depth)
+
+        #end
+
+        #@run_loop.work(proc {
+        #  callback.call
+        #})
       end
 
       # HTTP headers available
@@ -273,10 +277,14 @@ module Bespoked
 
     def thang(client, chunk, keep_alive, wrote_defer)
       if client && chunk && chunk.length > 0
-        client.write(chunk, {:wait => :promise}).then { |a|
+        logger.notify(:ONCE => :ONCE)
+        client.write(chunk, {:wait => :promise}).finally { |a|
           #client.close unless keep_alive
-          wrote_defer.notify(:step)
+          #puts a.inspect
+          logger.notify(:then => a)
+          #wrote_defer.notify(:step)
         }.catch { |e|
+          logger.notify(:catch => e)
           #should_close = e.is_a?(Libuv::Error::ECANCELED)
           #client.close if should_close
         }

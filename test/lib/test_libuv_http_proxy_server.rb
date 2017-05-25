@@ -42,7 +42,7 @@ Connection: keep-alive
 
     @called_upstream = 0
     @got_data = 0
-    @times = 2 * 1024 * 1024
+    @times = 2 * 1024 * 32
     @t = "0"
     @length = @t.length
 
@@ -112,8 +112,8 @@ Connection: keep-alive
 
         http_parser.on_message_complete = proc do |env|
           # Headers and body is all parsed
+          @logger.puts [:on_complete, env.inspect, @got_data, (@length * @times * 2)]
           if @got_data == (@length * @times * 2)
-            #@logger.puts [:on_complete, env.inspect, @got_data]
             client.close
           end
         end

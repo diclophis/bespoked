@@ -29,7 +29,7 @@ module Bespoked
           tried_dns = 0
 
           on_dns_ok = proc { |addrinfo|
-            @entry_point.record(:debug, :on_dns_ok, [addrinfo])
+            #@entry_point.record(:debug, :on_dns_ok, [addrinfo])
 
             ip_address = addrinfo[0][0]
             self.vhosts[host] = [upstreams[0], ip_address]
@@ -42,7 +42,7 @@ module Bespoked
 
           try_dns_service_lookup = proc {
             tried_dns += 1
-            @entry_point.record(:debug, :try_dns, [host, service_name])
+            #@entry_point.record(:debug, :try_dns, [host, service_name])
 
             dns_timer = @run_loop.timer
             dns_timer.progress do

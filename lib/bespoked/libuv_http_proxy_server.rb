@@ -80,17 +80,6 @@ module Bespoked
 
       new_client = run_loop.tcp
 
-      new_client.finally do |err|
-        #record :debug, :upstream_server_closed, [err, err.class].inspect
-        sp = install_shutdown_promise(client)
-        #record :debug, :sp_one, [client.class, client].inspect
-        sp.promise.progress do
-          #record :info, :upstream_server_closed_and_closed, []
-          #this possibly breaks response on upload
-          #client.close
-        end
-      end
-
       client.progress do |chunk|
         #record :debug, :progress, [chunk].inspect
         if reading_state == :request_to_upstream
@@ -135,7 +124,7 @@ module Bespoked
             host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
             port = url.port
             @run_loop.next_tick do
-              #record :debug, :si, [host, port, ip_address]
+              record :debug, :si, [host, port, ip_address]
               do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
             end
 
@@ -150,42 +139,9 @@ module Bespoked
         :stop
       end
 
-      ##################
-
-      #TODO: determine how to switch here based on if this is the ssl one or not...
-      #tls_options = {
-      #  :server => true,
-      #  :verify_peer => false
-      #}
-      #client.start_tls(tls_options)
-
-      new_client.catch do |err|
-        canceled_dns = err.is_a?(Libuv::Error::ECANCELED)
-        if canceled_dns
-          record :debug, :canceled_dns, [err].inspect
-          #try_dns_service_lookup.call
-        else
-          halt_connection(client, 500, [err, err.backtrace, :proxy_client_error])
-        end
-      end
-
       client.start_read
-    end
 
-    def write_chunk_to_socket(client, chunk)
-      if client && chunk && chunk.length > 0
-        client.write(chunk, {:wait => :promise}).then { |a|
-          #record :info, :proxy_wrote_write_chunk_to_socket, []
-          install_shutdown_promise(client).promise.progress do
-            #record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
-          end
-          install_shutdown_promise(client).notify
-        }.catch { |e|
-          #should_close = e.is_a?(Libuv::Error::ECANCELED)
-          #record :info, :proxy_write_error, [e, should_close].inspect
-          #client.close if should_close
-        }
-      end
+      record :debug, :wtf, []
     end
 
 #foop    def (
@@ -201,7 +157,8 @@ module Bespoked
         "X-Forwarded-For" => client.peername[1] || "", # TODO: determine if this makes the actual IP available
         "X-Request-Start" => "t=#{Time.now.to_f}", # track queue time in newrelic
         "X-Forwarded-Host" => "", # NOTE: this is important to pevent host poisoning... double check this
-        "Client-IP" => "" # strip Client-IP header to prevent rails spoofing error
+        "Client-IP" => "", # strip Client-IP header to prevent rails spoofing error
+        #"Connection" => "close" #TODO: dont force upstream non-keep-alive
       }
 
       proxy_override_headers = ENV.select { |possible_header|
@@ -249,16 +206,60 @@ module Bespoked
       request_to_upstream
     end
 
+    def write_chunk_to_socket(client, chunk)
+      if client && chunk && chunk.length > 0
+        record :info, :ONCE_OTHER, []
+        client.write(chunk, {:wait => :promise}).then { |a|
+          #record :info, :proxy_wrote_write_chunk_to_socket, []
+          #install_shutdown_promise(client).promise.progress do
+          #  #record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
+          #end
+          #install_shutdown_promise(client).notify
+        }.catch { |e|
+          record :info, :pther_catch, [e]
+          #should_close = e.is_a?(Libuv::Error::ECANCELED)
+          #record :info, :proxy_write_error, [e, should_close].inspect
+          #client.close if should_close
+        }
+      end
+    end
+
     #TODO: pass ENV somehow
     def other_twang(http_parser, new_client, client, body_left_over)
       request_to_upstream = construct_upstream_request(http_parser, client, body_left_over)
 
-      new_client.start_read
+      #new_client.start_read
 
       write_chunk_to_socket(new_client, request_to_upstream)
     end
 
+    def on_client_progress(client, chunk, _other)
+      #record :debug, :on_client_progress, [client, "XXX", _other].inspect
+      write_chunk_to_socket(client, chunk) unless client.closed?
+    end
+
     def do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
+      #TODO: ???
+      record :debug, :do_new_thing, [new_client].inspect
+
+      #TODO: !!!! this can timeout !!!!!
+      new_client.connect(ip_address, port.to_i, &proc {
+        record :debug, :connected_upstream, [ip_address].inspect
+
+        new_client.finally do |err|
+          record :debug, :upstream_server_closed, [err, err.class].inspect
+          #sp = install_shutdown_promise(client)
+          ###record :debug, :sp_one, [client.class, client].inspect
+          #sp.promise.progress do
+          #  record :info, :upstream_server_closed_and_closed, []
+          #  ##this possibly breaks response on upload
+          #  client.close
+          #end
+        end
+
+        new_client.progress(&method(:on_client_progress).curry[client])
+
+=begin
       new_client.progress(&proc { |chunk|
         write_chunk_to_socket(client, chunk) unless client.closed?
       })
@@ -269,6 +270,31 @@ module Bespoked
 
         other_twang(http_parser, new_client, client, body_left_over)
       })
+=end
+      ##################
+
+        #TODO: determine how to switch here based on if this is the ssl one or not...
+        #tls_options = {
+        #  :server => true,
+        #  :verify_peer => false
+        #}
+        #client.start_tls(tls_options)
+
+        new_client.catch do |err|
+          record :debug, :new_client_catch, [err, err.class].inspect
+          #canceled_dns = err.is_a?(Libuv::Error::ECANCELED)
+          #if canceled_dns
+          #  record :debug, :canceled_dns, [err].inspect
+          #  #try_dns_service_lookup.call
+          #else
+          #  halt_connection(client, 500, [err, err.backtrace, :proxy_client_error])
+          #end
+        end
+
+        new_client.start_read
+
+        other_twang(http_parser, new_client, client, body_left_over)
+      })
     end
 
     def halt_connection(client, status, reason)
@@ -276,10 +302,10 @@ module Bespoked
       response = reason.to_s
       client.write("HTTP/1.1 #{status} Halted\r\nConnection: close\r\nX-Echo-Forwarded-For: TODO\r\nContent-Length: #{response.length}\r\n\r\n#{response}", {:wait => :promise}).then {
         #record :debug, :wrote_halted_and_closed
-        client.close
+        #client.close
       }.catch { |e|
         #record :info, :wrote_halted_catch, [e].inspect
-        client.close
+        #client.close
       }
       :stop
     end
