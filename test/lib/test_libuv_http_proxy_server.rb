@@ -42,7 +42,7 @@ Connection: keep-alive
 
     @called_upstream = 0
     @got_data = 0
-    @times = 2 * 1024 * 32
+    @times = 2 * 1024 * 1024 * 2
     @t = "0"
     @length = @t.length
 
@@ -114,7 +114,7 @@ Connection: keep-alive
           # Headers and body is all parsed
           @logger.puts [:on_complete, env.inspect, @got_data, (@length * @times * 2)]
           if @got_data == (@length * @times * 2)
-            client.close
+            #client.close
           end
         end
 

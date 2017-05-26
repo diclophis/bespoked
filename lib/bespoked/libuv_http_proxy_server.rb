@@ -208,7 +208,7 @@ module Bespoked
 
     def write_chunk_to_socket(client, chunk)
       if client && chunk && chunk.length > 0
-        record :info, :ONCE_OTHER, []
+        #record :info, :ONCE_OTHER, []
         client.write(chunk, {:wait => :promise}).then { |a|
           #record :info, :proxy_wrote_write_chunk_to_socket, []
           #install_shutdown_promise(client).promise.progress do

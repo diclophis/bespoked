@@ -208,7 +208,9 @@ module Bespoked
         #callback = @run_loop.async do
         callback = nil
 
+        @run_loop.work do
           foop(outer_http_parser, outer_io, client, callback, request_depth)
+        end
 
         #end
 
@@ -278,7 +280,7 @@ module Bespoked
     def thang(client, chunk, keep_alive, wrote_defer)
       if client && chunk && chunk.length > 0
         logger.notify(:ONCE => :ONCE)
-        client.write(chunk, {:wait => :promise}).finally { |a|
+        client.write(chunk, {:wait => :promise}).then { |a|
           #client.close unless keep_alive
           #puts a.inspect
           logger.notify(:then => a)
