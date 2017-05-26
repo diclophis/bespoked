@@ -245,6 +245,7 @@ module Bespoked
 
       #TODO: figure out this case
       keep_alive = headers["Connection"]
+      logger.notify(:headers => headers)
 
       wrote_defer = @run_loop.defer
       thang(client, response, keep_alive, wrote_defer) unless client.closed?
@@ -283,8 +284,8 @@ module Bespoked
         client.write(chunk, {:wait => :promise}).then { |a|
           #client.close unless keep_alive
           #puts a.inspect
-          logger.notify(:then => a)
-          #wrote_defer.notify(:step)
+          logger.notify(:then => keep_alive)
+          wrote_defer.notify(:step) if keep_alive == "close"
         }.catch { |e|
           logger.notify(:catch => e)
           #should_close = e.is_a?(Libuv::Error::ECANCELED)

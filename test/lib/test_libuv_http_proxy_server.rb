@@ -6,15 +6,18 @@ GET /first HTTP/1.1
 Host: localhost
 User-Agent: minitest/ruby
 Accept: */png
-Connection: keep-alive
-
-GET /second HTTP/1.1
-Host: localhost
-User-Agent: minitest/ruby
-Accept: */txt
-Connection: keep-alive
+Connection: close
 
 HERE
+
+#Keep-Alive
+#GET /second HTTP/1.1
+#Host: localhost
+#User-Agent: minitest/ruby
+#Accept: */txt
+#Connection: Keep-Alive
+##
+#HERE
 
 =begin
 GET /second HTTP/1.1
@@ -42,7 +45,7 @@ Connection: keep-alive
 
     @called_upstream = 0
     @got_data = 0
-    @times = 2 * 1024 * 1024 * 2
+    @times = 2 #* 1024 * 1024 * 32
     @t = "0"
     @length = @t.length
 
@@ -54,7 +57,7 @@ Connection: keep-alive
 
     @mock_upstream_app = (proc { |env|
       @called_upstream += 1
-      [200, {"Content-Type" => "text/plain", "Content-Length" => @content_length.to_s}, @content]
+      [200, {"Content-Type" => "text/plain", "Content-Length" => @content_length.to_s, "Connection" => "close"}, @content]
     })
 
     @logger = Bespoked::Logger.new(STDERR, @run_loop)
@@ -147,8 +150,8 @@ Connection: keep-alive
         end
       end
 
-      @called_upstream.must_equal 2
-      @got_data.must_equal ((@length * @times * 2))
+      @called_upstream.must_equal 1
+      @got_data.must_equal ((@length * @times * 1))
     end
   end
 end

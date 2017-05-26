@@ -71,7 +71,7 @@ module Bespoked
     end
 
     def handle_client(client)
-      #record :debug, :start_handle_client, [client].inspect
+      record :debug, :start_handle_client, [client].inspect
       install_shutdown_promise(client)
 
       http_parser = Http::Parser.new
@@ -81,7 +81,7 @@ module Bespoked
       new_client = run_loop.tcp
 
       client.progress do |chunk|
-        #record :debug, :progress, [chunk].inspect
+        record :debug, :progress, [chunk].inspect
         if reading_state == :request_to_upstream
           if new_client && chunk && chunk.length > 0
             new_client.write(chunk)
@@ -233,7 +233,7 @@ module Bespoked
       write_chunk_to_socket(new_client, request_to_upstream)
     end
 
-    def on_client_progress(client, chunk, _other)
+    def on_client_progress(client, chunk, _other = nil)
       #record :debug, :on_client_progress, [client, "XXX", _other].inspect
       write_chunk_to_socket(client, chunk) unless client.closed?
     end
@@ -253,16 +253,18 @@ module Bespoked
           #sp.promise.progress do
           #  record :info, :upstream_server_closed_and_closed, []
           #  ##this possibly breaks response on upload
-          #  client.close
+          client.close
           #end
         end
 
         new_client.progress(&method(:on_client_progress).curry[client])
 
+        #new_client.progress do |chunk|
+        #  #write_chunk_to_socket(client, chunk) #unless client.closed?
+        #  on_client_progress(client, chunk)
+        #end
+
 =begin
-      new_client.progress(&proc { |chunk|
-        write_chunk_to_socket(client, chunk) unless client.closed?
-      })
 
       #TODO: !!!! this can timeout !!!!!
       new_client.connect(ip_address, port.to_i, &proc {
