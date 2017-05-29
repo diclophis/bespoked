@@ -245,7 +245,7 @@ module Bespoked
 
       #TODO: figure out this case
       keep_alive = headers["Connection"]
-      logger.notify(:headers => headers)
+      #logger.notify(:headers => headers)
 
       wrote_defer = @run_loop.defer
       thang(client, response, keep_alive, wrote_defer) unless client.closed?

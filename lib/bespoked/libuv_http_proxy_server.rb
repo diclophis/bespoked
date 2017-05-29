@@ -71,8 +71,8 @@ module Bespoked
     end
 
     def handle_client(client)
-      record :debug, :start_handle_client, [client].inspect
-      install_shutdown_promise(client)
+      #record :debug, :start_handle_client, [client].inspect
+      ##install_shutdown_promise(client)
 
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
@@ -81,7 +81,7 @@ module Bespoked
       new_client = run_loop.tcp
 
       client.progress do |chunk|
-        record :debug, :progress, [chunk].inspect
+        #record :debug, :progress, [chunk].inspect
         if reading_state == :request_to_upstream
           if new_client && chunk && chunk.length > 0
             new_client.write(chunk)
@@ -124,7 +124,7 @@ module Bespoked
             host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
             port = url.port
             @run_loop.next_tick do
-              record :debug, :si, [host, port, ip_address]
+              #record :debug, :si, [host, port, ip_address]
               do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
             end
 
@@ -140,8 +140,6 @@ module Bespoked
       end
 
       client.start_read
-
-      record :debug, :wtf, []
     end
 
 #foop    def (
@@ -210,11 +208,11 @@ module Bespoked
       if client && chunk && chunk.length > 0
         #record :info, :ONCE_OTHER, []
         client.write(chunk, {:wait => :promise}).then { |a|
-          #record :info, :proxy_wrote_write_chunk_to_socket, []
-          #install_shutdown_promise(client).promise.progress do
-          #  #record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
-          #end
-          #install_shutdown_promise(client).notify
+          record :info, :proxy_wrote_write_chunk_to_socket, []
+          ##install_shutdown_promise(client).promise.progress do
+          ##  record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
+          ##end
+          ###install_shutdown_promise(client).notify
         }.catch { |e|
           record :info, :pther_catch, [e]
           #should_close = e.is_a?(Libuv::Error::ECANCELED)
@@ -240,21 +238,22 @@ module Bespoked
 
     def do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
       #TODO: ???
-      record :debug, :do_new_thing, [new_client].inspect
+      #record :debug, :do_new_thing, [new_client].inspect
 
       #TODO: !!!! this can timeout !!!!!
       new_client.connect(ip_address, port.to_i, &proc {
-        record :debug, :connected_upstream, [ip_address].inspect
+        #record :debug, :connected_upstream, [ip_address].inspect
 
         new_client.finally do |err|
-          record :debug, :upstream_server_closed, [err, err.class].inspect
-          #sp = install_shutdown_promise(client)
-          ###record :debug, :sp_one, [client.class, client].inspect
-          #sp.promise.progress do
-          #  record :info, :upstream_server_closed_and_closed, []
-          #  ##this possibly breaks response on upload
-          client.close
-          #end
+          ##sp = install_shutdown_promise(client)
+          ##record :debug, :upstream_server_closed, [sp, err, err.class].inspect
+          #####record :debug, :sp_one, [client.class, client].inspect
+          ##sp.promise.progress do
+          ##  record :info, :upstream_server_closed_and_closed, []
+          ###  ##this possibly breaks response on upload
+          ##  client.close
+          ##end
+          ##install_shutdown_promise(client).notify
         end
 
         new_client.progress(&method(:on_client_progress).curry[client])
