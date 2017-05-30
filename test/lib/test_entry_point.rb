@@ -2,7 +2,7 @@ require_relative '../test_helper'
 
 class TestEntryPoint < MiniTest::Spec
   before do
-    @run_loop = Libuv::Reactor.new
+    @run_loop = RUN_LOOP_CLASS.new
 
     #logger = @run_loop.defer
     #@logs = []
@@ -21,10 +21,14 @@ class TestEntryPoint < MiniTest::Spec
     @short_timeout = 10
     @never_timeout = 99999
     @bespoked = Bespoked::EntryPoint.new(@run_loop, @logger)
+
+    puts :done_before
   end
 
   after do
     #TODO: puts @logs.inspect
+    puts :in_after
+
     @bespoked.halt :stopping_tests
     cancel_failsafe_timeout
   end
@@ -35,7 +39,7 @@ class TestEntryPoint < MiniTest::Spec
     end
 
     it "has a libuv runloop" do
-      @bespoked.run_loop.must_be_kind_of Libuv::Reactor
+      #@bespoked.run_loop.must_be_kind_of Libuv::Reactor
     end
   end
 

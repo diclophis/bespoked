@@ -4,7 +4,7 @@ $:.unshift File.dirname(__FILE__)
 
 require 'config/environment'
 
-@run_loop = Libuv::Reactor.new
+@run_loop = RUN_LOOP_CLASS.new
 
 #@run_loop.run(:UV_RUN_ONCE) do |exception_handler|
 #  #exception_handler.notifier do |error, message, trace|

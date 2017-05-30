@@ -14,9 +14,9 @@ require 'config/environment'
     @logger.notify({:lineno => :main, :date => Time.now, :exception => error.class, :backtrace => error.backtrace, :message => message, :trace => trace || error.to_s})
   end
 
-  client = @run_loop.tcp
+  server = @run_loop.tcp
 
-  client.connect("127.0.0.1", 4567) do
+  server.bind("127.0.0.1", 4567) do |client|
     @logger.notify(:connected => true)
 
     client.finally do |err|
@@ -26,12 +26,14 @@ require 'config/environment'
 
     client.progress do |chunk|
       @logger.notify(:chunk => chunk)
+      client.write("FooResponed")
+      #client.close
     end
 
     client.start_read
-
-    client.write("GET / HTTP/1.1\r\nHost: foo\r\nConnection: Close\r\n\r\n")
   end
+
+  server.listen(1024)
 end
 
 puts :wtf

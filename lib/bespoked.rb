@@ -2,8 +2,10 @@
 require 'yaml'
 require 'open3'
 require 'digest/md5'
-require 'libuv'
-require 'libuv/coroutines'
+
+#require 'libuv'
+#require 'libuv/coroutines'
+
 require 'http/parser'
 require 'yajl'
 require 'rack'
@@ -44,4 +46,6 @@ module Bespoked
 
   # generic rack support
   autoload :RackHandler, 'bespoked/rack_handler'
+
+  autoload :RunLoop, 'bespoked/run_loop.rb'
 end

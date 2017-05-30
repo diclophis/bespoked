@@ -300,9 +300,9 @@ module Bespoked
 
       if self.recheck
         self.install_ingress_into_proxy_controller
-        #@heartbeat.stop
-        #@heartbeat.start(RELOAD_TIMEOUT, 0)
-        #@heartbeat.notify
+        ##@heartbeat.stop
+        ##@heartbeat.start(RELOAD_TIMEOUT, 0)
+        ##@heartbeat.notify
       end
     end
 

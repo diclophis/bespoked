@@ -67,7 +67,14 @@ module Bespoked
     end
 
     def install_shutdown_promise(client)
-      @shutdown_promises[client] ||= @run_loop.defer
+      @shutdown_promises[client] ||= begin
+        timer = @run_loop.timer
+        timer.progress do
+          record :debug, :timer_closed, [].inspect
+          client.close
+        end
+        timer
+      end
     end
 
     def handle_client(client)
@@ -233,6 +240,9 @@ module Bespoked
 
     def on_client_progress(client, chunk, _other = nil)
       #record :debug, :on_client_progress, [client, "XXX", _other].inspect
+      sp = install_shutdown_promise(client)
+      sp.stop
+      sp.start(1000, 0)
       write_chunk_to_socket(client, chunk) unless client.closed?
     end
 
@@ -245,8 +255,8 @@ module Bespoked
         #record :debug, :connected_upstream, [ip_address].inspect
 
         new_client.finally do |err|
-          ##sp = install_shutdown_promise(client)
-          ##record :debug, :upstream_server_closed, [sp, err, err.class].inspect
+          sp = install_shutdown_promise(client)
+          record :debug, :upstream_server_closed, [].inspect
           #####record :debug, :sp_one, [client.class, client].inspect
           ##sp.promise.progress do
           ##  record :info, :upstream_server_closed_and_closed, []
@@ -254,14 +264,15 @@ module Bespoked
           ##  client.close
           ##end
           ##install_shutdown_promise(client).notify
+          sp.start(1000, 0)
         end
 
-        new_client.progress(&method(:on_client_progress).curry[client])
+        #new_client.progress(&method(:on_client_progress).curry[client])
 
-        #new_client.progress do |chunk|
+        new_client.progress do |chunk|
         #  #write_chunk_to_socket(client, chunk) #unless client.closed?
-        #  on_client_progress(client, chunk)
-        #end
+          on_client_progress(client, chunk)
+        end
 
 =begin
 
