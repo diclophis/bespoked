@@ -280,11 +280,11 @@ module Bespoked
 
     def thang(client, chunk, keep_alive, wrote_defer)
       if client && chunk && chunk.length > 0
-        logger.notify(:ONCE => :ONCE)
+        #logger.notify(:ONCE => :ONCE)
         client.write(chunk, {:wait => :promise}).then { |a|
           #client.close unless keep_alive
           #puts a.inspect
-          logger.notify(:then => keep_alive)
+          #logger.notify(:then => keep_alive)
           wrote_defer.notify(:step) if keep_alive == "close"
         }.catch { |e|
           logger.notify(:catch => e)

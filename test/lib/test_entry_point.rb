@@ -22,12 +22,12 @@ class TestEntryPoint < MiniTest::Spec
     @never_timeout = 99999
     @bespoked = Bespoked::EntryPoint.new(@run_loop, @logger)
 
-    puts :done_before
+    #puts :done_before
   end
 
   after do
     #TODO: puts @logs.inspect
-    puts :in_after
+    #puts :in_after
 
     @bespoked.halt :stopping_tests
     cancel_failsafe_timeout

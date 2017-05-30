@@ -70,8 +70,9 @@ module Bespoked
       @shutdown_promises[client] ||= begin
         timer = @run_loop.timer
         timer.progress do
-          record :debug, :timer_closed, [].inspect
+          #record :debug, :timer_closed, [].inspect
           client.close
+          @shutdown_promises[client] = nil
         end
         timer
       end
@@ -215,13 +216,14 @@ module Bespoked
       if client && chunk && chunk.length > 0
         #record :info, :ONCE_OTHER, []
         client.write(chunk, {:wait => :promise}).then { |a|
-          record :info, :proxy_wrote_write_chunk_to_socket, []
+          #record :info, :proxy_wrote_write_chunk_to_socket, []
           ##install_shutdown_promise(client).promise.progress do
           ##  record :info, :proxy_wrote_write_chunk_to_socket_and_close, [client.class, client]
           ##end
           ###install_shutdown_promise(client).notify
         }.catch { |e|
-          record :info, :pther_catch, [e]
+          #TODO?
+          #record :info, :pther_catch, [e]
           #should_close = e.is_a?(Libuv::Error::ECANCELED)
           #record :info, :proxy_write_error, [e, should_close].inspect
           #client.close if should_close
@@ -256,7 +258,7 @@ module Bespoked
 
         new_client.finally do |err|
           sp = install_shutdown_promise(client)
-          record :debug, :upstream_server_closed, [].inspect
+          #record :debug, :upstream_server_closed, [].inspect
           #####record :debug, :sp_one, [client.class, client].inspect
           ##sp.promise.progress do
           ##  record :info, :upstream_server_closed_and_closed, []
@@ -264,6 +266,7 @@ module Bespoked
           ##  client.close
           ##end
           ##install_shutdown_promise(client).notify
+          sp.stop
           sp.start(1000, 0)
         end
 

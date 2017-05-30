@@ -121,7 +121,7 @@ Connection: keep-alive
           # Headers and body is all parsed
           @logger.puts [:on_complete, env.inspect, @got_data, (@length * @times)]
           if @got_data == (@length * @times)
-            client.close
+            #client.close
           end
         end
 
