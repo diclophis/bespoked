@@ -38,11 +38,6 @@
 #    targetPort: ingtls-incoming
 #    protocol: TCP
 #    name: lets-encrypt-ingress-comms
-#
-#  - port: 32100
-#    targetPort: 32100
-#    protocol: TCP
-#    name: attalos-bosh-comms
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -156,16 +151,16 @@ spec:
         #  exec:
         #    command:
         #    - /bin/true
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 55101
-            scheme: HTTP
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 55101
-            scheme: HTTP
+        #readinessProbe:
+        #  httpGet:
+        #    path: /healthz
+        #    port: 55101
+        #    scheme: HTTP
+        #livenessProbe:
+        #  httpGet:
+        #    path: /healthz
+        #    port: 55101
+        #    scheme: HTTP
         #  #initialDelaySeconds: 30
         #  #timeoutSeconds: 45
         #  #periodSeconds: 120

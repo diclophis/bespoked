@@ -258,7 +258,7 @@ module Bespoked
 
         new_client.finally do |err|
           sp = install_shutdown_promise(client)
-          #record :debug, :upstream_server_closed, [].inspect
+          record :debug, :upstream_server_closed, [].inspect
           #####record :debug, :sp_one, [client.class, client].inspect
           ##sp.promise.progress do
           ##  record :info, :upstream_server_closed_and_closed, []

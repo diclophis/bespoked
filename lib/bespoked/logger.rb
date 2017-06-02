@@ -32,7 +32,8 @@ module Bespoked
     end
 
     def add(sev, thing, msg)
-      #$stdout.puts [sev, thing, msg]
+      #$stderr.puts [sev, thing, msg].inspect
+
       @libuv_logger.notify(msg)
 
       false

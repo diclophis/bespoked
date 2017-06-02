@@ -46,7 +46,7 @@ Connection: keep-alive
 
     @called_upstream = 0
     @got_data = 0
-    @times = 2
+    @times = 2 * 1024 * 4
     @t = "0" * @times
     @length = @t.length
 
@@ -103,7 +103,7 @@ Connection: keep-alive
 
         http_parser = Http::Parser.new
         http_parser.on_headers_complete = proc do
-          #@logger.puts [:http_parser, http_parser.inspect, http_parser.headers]
+          @logger.puts [:http_parser, http_parser.inspect, http_parser.headers]
 
           if http_parser.upgrade_data && http_parser.upgrade_data.length > 0
             #request_to_upstream.concat(http_parser.upgrade_data)
@@ -113,7 +113,7 @@ Connection: keep-alive
 
         http_parser.on_body = proc do |chunk|
           # One chunk of the body
-          #@logger.puts [:on_body, chunk.length]
+          @logger.puts [:on_body, chunk.length]
           @got_data += chunk.length
         end
 
@@ -121,7 +121,7 @@ Connection: keep-alive
           # Headers and body is all parsed
           @logger.puts [:on_complete, env.inspect, @got_data, (@length * @times)]
           if @got_data == (@length * @times)
-            #client.close
+            client.close
           end
         end
 
@@ -130,7 +130,7 @@ Connection: keep-alive
         end
 
         client.progress do |chunk|
-          #@logger.puts [:called_upstream, @called_upstream, chunk.length, @got_data].inspect
+          @logger.puts [:called_upstream, @called_upstream, chunk.length, @got_data].inspect
 
           if chunk && chunk.length > 0
             offset_of_body_left_in_buffer = http_parser << chunk

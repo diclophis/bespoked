@@ -34,13 +34,17 @@ module Bespoked
 
   class Then
     attr_accessor :args
+    attr_accessor :on_then
+
     def initialize(*args)
       self.args = args
     end
 
-    def then
-      puts [:tthen, @args].inspect
-      yield @args
+    def then(&block)
+      puts [:tthen, @args, block].inspect
+
+      self.on_then = block
+
       return Catch.new
     end
   end
@@ -58,10 +62,12 @@ module Bespoked
     attr_accessor :on_accept
     attr_accessor :output_buffer
     attr_accessor :input_buffer
+    attr_accessor :write_thens
 
     def initialize(args = {})
       self.flags = args[:flags]
       self.input_buffer, self.output_buffer = IO.pipe
+      self.write_thens = []
     end
 
     def to_io
@@ -126,26 +132,39 @@ module Bespoked
     end
 
     def write(chunk, other = nil)
-      puts [:write_buffer, chunk, other].inspect
-      @output_buffer.write(chunk)
-      Then.new
+      #puts [:write_buffer, chunk, other].inspect
+      @output_buffer.write_nonblock(chunk)
+      new_then = Then.new
+      self.write_thens << new_then
+      new_then
     end
 
     def perform_write_callbacks
-      if @io.is_a?(TCPSocket)
+      #if @io.is_a?(TCPSocket)
         while output_ready_to_be_written = @input_buffer.read_nonblock(1024)
-          puts [:write_nonblock, output_ready_to_be_written].inspect
+          #puts [:write_nonblock, output_ready_to_be_written].inspect
           @io.write_nonblock(output_ready_to_be_written)
         end
-      else
-      end
+      #end
     rescue IO::EAGAINWaitReadable => e
       #puts [:write_call, e].inspect
+
+        #puts :wtf2
+
+        #if @input_buffer.eof?
+          @write_thens.each do |write_then|
+            puts :wtf
+            write_then.on_then.call(nil) if write_then.on_then
+          end
+
+          self.write_thens = [] #@write_thens.empty!
+        #end
     end
 
     def listen(*args)
-      puts [:tlist].inspect
-      return "tlist"
+      #puts [:tlist].inspect
+
+      return nil
     end
 
     def close(*args)
@@ -200,7 +219,7 @@ module Bespoked
         if @on_progress
           if recvd = @io.read_nonblock(1024)
             if recvd.length > 0
-              puts [:recvd, recvd].inspect
+              puts [:recvd, @on_progress].inspect
               @on_progress.call(recvd)
             end
           end
@@ -282,7 +301,8 @@ module Bespoked
       }
 
       while all_io_open.call
-        not_nil = @ios.reject { |io| io.io.nil? }
+        $stderr.write("l")
+        not_nil = @ios.reject { |io| io.io.nil? || io.io.closed? }
         readable, writable, errored = IO.select(not_nil, not_nil, not_nil, 10000)
         readable.each do |readable_io|
           if new_io = readable_io.perform_read_callbacks

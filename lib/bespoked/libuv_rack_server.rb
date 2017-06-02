@@ -284,7 +284,7 @@ module Bespoked
         client.write(chunk, {:wait => :promise}).then { |a|
           #client.close unless keep_alive
           #puts a.inspect
-          #logger.notify(:then => keep_alive)
+          logger.notify(:then => keep_alive)
           wrote_defer.notify(:step) if keep_alive == "close"
         }.catch { |e|
           logger.notify(:catch => e)

@@ -26,8 +26,9 @@ require 'config/environment'
 
     client.progress do |chunk|
       @logger.notify(:chunk => chunk)
-      client.write("FooResponed")
-      #client.close
+      client.write("FooResponed").then do
+        client.close
+      end
     end
 
     client.start_read
