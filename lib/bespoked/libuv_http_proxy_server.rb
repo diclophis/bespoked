@@ -20,7 +20,7 @@ module Bespoked
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       @server.catch do |reason|
-        #record :info, :libuv_http_proxy_server_catch, [reason].inspect
+        record :info, :libuv_http_proxy_server_catch, [reason].inspect
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
@@ -79,7 +79,8 @@ module Bespoked
     end
 
     def handle_client(client)
-      #record :debug, :start_handle_client, [client].inspect
+      record :debug, :start_handle_client, [client].inspect
+
       ##install_shutdown_promise(client)
 
       http_parser = Http::Parser.new
@@ -89,9 +90,12 @@ module Bespoked
       new_client = run_loop.tcp
 
       client.progress do |chunk|
-        #record :debug, :progress, [chunk].inspect
+        record :debug, :progress, [chunk].inspect
+
         if reading_state == :request_to_upstream
           if new_client && chunk && chunk.length > 0
+            record :debug, :request_to_upstream, [chunk].inspect
+
             new_client.write(chunk)
           end
         end
@@ -119,7 +123,7 @@ module Bespoked
           in_url = URI.parse("http://" + env["HTTP_HOST"])
 
           #[{:date=>2017-05-16 08:18:49 +0000, :level=>:debug, :name=>:up_up_up, :message=>"[[\"attalos-bosh.bardin.haus\", \"webdav.bardin.haus\", \"bardin.haus\", \"attalos.bardin.haus\"]]"}]
-          #record :debug, :up_up_up, [@proxy_controller.vhosts.keys]
+          record :debug, :up_up_up, [@proxy_controller.vhosts.keys]
 
           service_host, ip_address = @proxy_controller.vhosts[in_url.host]
 
@@ -132,7 +136,8 @@ module Bespoked
             host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
             port = url.port
             @run_loop.next_tick do
-              #record :debug, :si, [host, port, ip_address]
+              record :debug, :si, [host, port, ip_address]
+
               do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
             end
 
@@ -141,7 +146,7 @@ module Bespoked
         end
 
         unless handled
-          halt_connection(client, 404, [:no_service_found, @proxy_controller.vhosts.keys, in_url.host])
+          halt_connection(client, 404, [:no_service_found, @proxy_controller.vhosts.keys])
         end
       
         :stop
@@ -243,8 +248,8 @@ module Bespoked
     def on_client_progress(client, chunk, _other = nil)
       #record :debug, :on_client_progress, [client, "XXX", _other].inspect
       sp = install_shutdown_promise(client)
-      sp.stop
-      sp.start(1000, 0)
+      #sp.stop
+      #sp.start(1000, 0)
       write_chunk_to_socket(client, chunk) unless client.closed?
     end
 
@@ -254,7 +259,7 @@ module Bespoked
 
       #TODO: !!!! this can timeout !!!!!
       new_client.connect(ip_address, port.to_i, &proc {
-        #record :debug, :connected_upstream, [ip_address].inspect
+        record :debug, :connected_upstream, [ip_address].inspect
 
         new_client.finally do |err|
           sp = install_shutdown_promise(client)
@@ -267,7 +272,7 @@ module Bespoked
           ##end
           ##install_shutdown_promise(client).notify
           sp.stop
-          sp.start(1, 0)
+          sp.start(32 * 1000, 0)
         end
 
         #new_client.progress(&method(:on_client_progress).curry[client])

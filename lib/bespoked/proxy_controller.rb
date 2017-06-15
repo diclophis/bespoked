@@ -36,7 +36,7 @@ module Bespoked
           }
 
           on_dns_bad = proc { |err|
-            @entry_point.record(:debug, :on_dns_bad, err)
+            @entry_point.record(:debug, :on_dns_bad, [host, service_name, err])
             #TODO: ????
           }
 
@@ -127,6 +127,8 @@ module Bespoked
           end
         end
       end
+
+      #vhosts << ["10.0.0.95", "10.0.0.95", ["10.0.0.95:9090"]]
 
       @entry_point.record :info, :vhosts, vhosts
 
