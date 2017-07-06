@@ -25,7 +25,7 @@ module Bespoked
     def handle_request(env)
       @logger.notify(:dashboard => env)
 
-      ['200', {'Content-Type' => 'text/html'}, ["OK. #{@proxy_controller.vhosts.inspect}\r\n"]]
+      ['200', {'Content-Type' => 'text/html', 'Connection' => 'close'}, ["OK. #{@proxy_controller.vhosts.inspect}\r\n"]]
     end
   end
 end

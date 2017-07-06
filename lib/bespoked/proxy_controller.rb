@@ -17,7 +17,7 @@ module Bespoked
     end
 
     def install(ingress_descriptions)
-      @entry_point.record(:debug, :install_ingress_descriptions)
+      #@entry_point.record(:debug, :install_ingress_descriptions)
 
       #@run_loop.log(:info, :proxy_controller_install, ingress_descriptions.keys)
         #@run_loop.log(:info, :vhosts_extracted, vhosts_for_ingress)

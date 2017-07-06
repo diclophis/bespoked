@@ -174,23 +174,23 @@ module Bespoked
     end
 
     def install_heartbeat
-      self.record :info, :pre_install_hb, []
+      #self.record :info, :pre_install_hb, []
 
       self.heartbeat = @run_loop.defer
 
       @heartbeat.promise.progress do
-        self.record :info, :heartbeat_progress, []
+        #self.record :info, :heartbeat_progress, []
 
         self.install_ingress_into_proxy_controller
       end
 
-      self.record :info, :installed_heartbeat, []
+      #self.record :info, :installed_heartbeat, []
 
       self.heartbeat
     end
 
     def resolve_authentication!
-      self.record :info, :resolved_auth, []
+      #self.record :info, :resolved_auth, []
 
       @failure_to_auth_timer.stop
       @authenticated = true

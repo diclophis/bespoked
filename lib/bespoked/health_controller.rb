@@ -23,7 +23,7 @@ module Bespoked
     def handle_request(env)
       @logger.notify(:health => env)
 
-      ['200', {'Content-Type' => 'text/html'}, ["OK.\r\n"]]
+      ['200', {'Content-Type' => 'text/html', 'Connection' => 'close'}, ["OK.\r\n"]]
     end
   end
 end
