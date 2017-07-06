@@ -19,8 +19,8 @@ module Bespoked
 
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
-      @server.catch do |reason|
-        record :info, :libuv_http_proxy_server_catch, [reason].inspect
+      @server.catch do |reason, els|
+        record :info, :libuv_http_proxy_server_catch, [reason, els].inspect
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
