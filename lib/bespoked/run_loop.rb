@@ -153,7 +153,7 @@ module Bespoked
 
         #if @input_buffer.eof?
           @write_thens.each do |write_then|
-            puts :wtf
+            puts :write_thens
             write_then.on_then.call(nil) if write_then.on_then
           end
 

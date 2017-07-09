@@ -94,7 +94,7 @@ module Bespoked
 
         if reading_state == :request_to_upstream
           if new_client && chunk && chunk.length > 0
-            record :debug, :request_to_upstream, [chunk].inspect
+            #record :debug, :request_to_upstream, [chunk].inspect
 
             new_client.write(chunk)
           end
@@ -102,7 +102,8 @@ module Bespoked
 
         if http_parser && reading_state == :request_to_proxy
           if chunk && chunk.length > 0
-            record :debug, :request_to_proxy, [chunk].inspect
+            #record :debug, :request_to_proxy, [chunk].inspect
+
             offset_of_body_left_in_buffer = http_parser << chunk
             body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
           end

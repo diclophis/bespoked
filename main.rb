@@ -52,4 +52,4 @@ require 'config/environment'
   bespoked.run_ingress_controller
 end
 
-puts :wtf
+puts :exited_due_to_full_halt

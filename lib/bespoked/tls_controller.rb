@@ -29,6 +29,8 @@ module Bespoked
       client = Acme::Client.new(private_key: private_key, endpoint: endpoint, connection_options: { request: { open_timeout: 5, timeout: 5 } })
       @client = client
 
+      #FIX RATE LIMIT!!!
+
       # If the private key is not known to the server, we need to register it for the first time.
       registration = client.register(contact: 'mailto:diclophis@gmail.com')
       @logger.puts registration
@@ -44,10 +46,14 @@ module Bespoked
       # and _must not_ try to solve another challenge.
       do_not_solve_dns_challenge = authorization.status == 'valid' # or => 'pending'
 
-      unless do_not_solve_dns_challenge
+      @logger.puts [dns, authorization.status, do_not_solve_dns_challenge].inspect
+
+      if do_not_solve_dns_challenge
+        finalize(dns)
+      else
         # You can can store the authorization's URI to fully recover it and
         # any associated challenges via Acme::Client#fetch_authorization.
-        @logger.puts authorization.uri # => '...'
+        @logger.puts [dns, authorization.uri].inspect # => '...'
 
         # This example is using the http-01 challenge type. Other challenges are dns-01 or tls-sni-01.
         challenge = authorization.http01
@@ -66,28 +72,16 @@ module Bespoked
 
         # Once you are ready to serve the confirmation request you can proceed.
         
-        @logger.puts challenge.request_verification # => true
+        @logger.puts [dns, challenge.request_verification].inspect # => true
 
         timer = @run_loop.timer
         timer.progress do
-          @logger.puts challenge.authorization.verify_status # => 'pending'
+          @logger.puts [dns, challenge.authorization.verify_status].inspect # => 'pending'
+
           if challenge.authorization.verify_status == 'valid'
-            csr = Acme::Client::CertificateRequest.new(names: [dns])
+            finalize(dns)
 
-            # We can now request a certificate. You can pass anything that returns
-            # a valid DER encoded CSR when calling to_der on it. For example an
-            # OpenSSL::X509::Request should work too.
-            certificate = @client.new_certificate(csr) # => #<Acme::Client::Certificate ....>
-
-            # Save the certificate and the private key to files
-            @proxy_controller.add_tls_host(certificate.request.private_key.to_pem, certificate.fullchain_to_pem, dns)
-
-            #certificate.request.private_key.to_pem)
-            #File.write("cert.pem", certificate.to_pem)
-            #File.write("chain.pem", certificate.chain_to_pem)
-            #File.write("fullchain.pem", certificate.fullchain_to_pem)
-
-            @logger.puts("GOT TLS!!!")
+            @logger.puts [dns, "GOT!"].inspect
 
             timer.stop
           end
@@ -96,14 +90,35 @@ module Bespoked
       end
     end
 
+    def finalize(dns)
+      csr = Acme::Client::CertificateRequest.new(names: [dns])
+
+      # We can now request a certificate. You can pass anything that returns
+      # a valid DER encoded CSR when calling to_der on it. For example an
+      # OpenSSL::X509::Request should work too.
+      certificate = @client.new_certificate(csr) # => #<Acme::Client::Certificate ....>
+
+      # Save the certificate and the private key to files
+      @proxy_controller.add_tls_host(certificate.request.private_key.to_pem, certificate.fullchain_to_pem, dns)
+
+      #certificate.request.private_key.to_pem)
+      #File.write("cert.pem", certificate.to_pem)
+      #File.write("chain.pem", certificate.chain_to_pem)
+      #File.write("fullchain.pem", certificate.fullchain_to_pem)
+    end
+
     def shutdown
       @rack_server.shutdown
     end
 
     def start
-      self.install_tls_registration("bardin.haus")
-      #self.install_tls_registration("attalos.bardin.haus")
       @rack_server.start
+
+      self.install_tls_registration("bardin.haus")
+      self.install_tls_registration("attalos.bardin.haus")
+      self.install_tls_registration("attalos-bosh.bardin.haus")
+      self.install_tls_registration("photography.bardin.haus")
+      self.install_tls_registration("webdav.bardin.haus")
     end
 
     def handle_request(env)
