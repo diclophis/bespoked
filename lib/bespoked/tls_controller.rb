@@ -12,19 +12,18 @@ module Bespoked
       self.logger = logger_in
       self.run_loop = run_loop_in
       self.proxy_controller = proxy_controller_in
-      self.rack_server = LibUVRackServer.new(@run_loop, @logger, method(:handle_request), {:Port => 55101})
+      self.rack_server = LibUVRackServer.new(@run_loop, @logger, method(:handle_request), {:Port => 80})
 
       self.challenges = {}
 
-=begin
       # We're going to need a private key.
       private_key = OpenSSL::PKey::RSA.new(4096)
 
       # We need an ACME server to talk to, see github.com/letsencrypt/boulder
       # WARNING: This endpoint is the production endpoint, which is rate limited and will produce valid certificates.
       # You should probably use the staging endpoint for all your experimentation:
-      endpoint = 'https://acme-staging.api.letsencrypt.org/'
-      #endpoint = 'https://acme-v01.api.letsencrypt.org/'
+      #endpoint = 'https://acme-staging.api.letsencrypt.org/'
+      endpoint = 'https://acme-v01.api.letsencrypt.org/'
 
       # Initialize the client
       client = Acme::Client.new(private_key: private_key, endpoint: endpoint, connection_options: { request: { open_timeout: 5, timeout: 5 } })
@@ -36,7 +35,6 @@ module Bespoked
 
       # You may need to agree to the terms of service (that's up the to the server to require it or not but boulder does by default)
       @logger.puts registration.agree_terms
-=end
     end
 
     def install_tls_registration(dns)
@@ -68,13 +66,13 @@ module Bespoked
 
         # Once you are ready to serve the confirmation request you can proceed.
         
-        puts challenge.request_verification # => true
+        @logger.puts challenge.request_verification # => true
 
         timer = @run_loop.timer
         timer.progress do
           @logger.puts challenge.authorization.verify_status # => 'pending'
           if challenge.authorization.verify_status == 'valid'
-            csr = Acme::Client::CertificateRequest.new(names: dns)
+            csr = Acme::Client::CertificateRequest.new(names: [dns])
 
             # We can now request a certificate. You can pass anything that returns
             # a valid DER encoded CSR when calling to_der on it. For example an
@@ -88,10 +86,13 @@ module Bespoked
             #File.write("cert.pem", certificate.to_pem)
             #File.write("chain.pem", certificate.chain_to_pem)
             #File.write("fullchain.pem", certificate.fullchain_to_pem)
+
+            @logger.puts("GOT TLS!!!")
+
             timer.stop
           end
         end
-        timer.start(5000, 5000)
+        timer.start(10000, 10000)
       end
     end
 
@@ -100,7 +101,7 @@ module Bespoked
     end
 
     def start
-      #self.install_tls_registration("bardin.haus")
+      self.install_tls_registration("bardin.haus")
       #self.install_tls_registration("attalos.bardin.haus")
       @rack_server.start
     end
@@ -111,7 +112,7 @@ module Bespoked
       content_length = 0
       status_code = 404
 
-      #@logger.puts env.inspect
+      @logger.puts env.inspect
 
       if env["PATH_INFO"] && env["PATH_INFO"].include?("healthz")
         status_code = 200

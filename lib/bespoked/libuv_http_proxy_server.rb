@@ -31,7 +31,7 @@ module Bespoked
     end
 
     def add_tls_host(private_key, cert_chain, host_name)
-      #record :info, :add_tls_host, [private_key, cert_chain, host_name].inspect
+      record :info, :add_tls_host, [private_key, cert_chain, host_name].inspect
 
       temp_key = Tempfile.new('bespoked-tls-key')
       key_path = temp_key.path + ".keep"
@@ -94,7 +94,7 @@ module Bespoked
 
         if reading_state == :request_to_upstream
           if new_client && chunk && chunk.length > 0
-            #record :debug, :request_to_upstream, [chunk].inspect
+            record :debug, :request_to_upstream, [chunk].inspect
 
             new_client.write(chunk)
           end
@@ -102,6 +102,7 @@ module Bespoked
 
         if http_parser && reading_state == :request_to_proxy
           if chunk && chunk.length > 0
+            record :debug, :request_to_proxy, [chunk].inspect
             offset_of_body_left_in_buffer = http_parser << chunk
             body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
           end
@@ -152,6 +153,13 @@ module Bespoked
         :stop
       end
 
+
+      #TODO: determine how to switch here based on if this is the ssl one or not...
+      #tls_options = {
+      #  :server => true,
+      #  :verify_peer => false
+      #}
+      client.start_tls #(tls_options)
       client.start_read
     end
 
@@ -292,13 +300,6 @@ module Bespoked
       })
 =end
       ##################
-
-        #TODO: determine how to switch here based on if this is the ssl one or not...
-        #tls_options = {
-        #  :server => true,
-        #  :verify_peer => false
-        #}
-        #client.start_tls(tls_options)
 
         new_client.catch do |err|
           record :debug, :new_client_catch, [err, err.class].inspect
