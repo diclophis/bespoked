@@ -12,3 +12,4 @@ USER bespoked
 RUN bundle install --force --path=vendor/bundle --jobs=4 --retry=3 --deployment
 ADD . /home/bespoked
 CMD ["bundle", "exec" "ruby", "/home/bespoked/main.rb"]
+USER root
