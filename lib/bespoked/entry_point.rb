@@ -19,6 +19,7 @@ module Bespoked
                   :authenticated,
                   :stopping,
                   :heartbeat,
+                  :tls,
                   :tls_controller
 
     RECONNECT_WAIT = 2000
@@ -60,7 +61,7 @@ module Bespoked
       @list_of_resources_to_watch = list_of_resources_to_watch
 
       self.proxy_controller_factory_class = Bespoked.const_get(options["proxy-controller-factory-class"] || "RackProxyController")
-      self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self)
+      self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self, options["port"])
 
       self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "KubernetesApiWatchFactory")
       self.watch_factory = @watch_factory_class.new(@run_loop, @logger)
@@ -68,7 +69,12 @@ module Bespoked
       # fork these into sub processes?
       self.health_controller = Bespoked::HealthController.new(@run_loop, @logger)
       self.dashboard_controller = Bespoked::DashboardController.new(@run_loop, @logger, @proxy_controller)
-      self.tls_controller = Bespoked::TlsController.new(@run_loop, @logger, proxy_controller)
+
+      self.tls = options["tls"]
+
+      if @tls
+        self.tls_controller = Bespoked::TlsController.new(@run_loop, @logger, proxy_controller)
+      end
     end
 
     def halt(message)
@@ -77,7 +83,7 @@ module Bespoked
       @proxy_controller.shutdown
       @health_controller.shutdown
       @dashboard_controller.shutdown
-      @tls_controller.shutdown
+      @tls_controller.shutdown if @tls_controller
       @logger.shutdown
 
       @watches.each do |watch|
@@ -137,7 +143,7 @@ module Bespoked
       @proxy_controller.start
       @health_controller.start
       @dashboard_controller.start
-      @tls_controller.start
+      @tls_controller.start if @tls_controller
 
       self.failure_to_auth_timer = @run_loop.timer
       @failure_to_auth_timer.progress do

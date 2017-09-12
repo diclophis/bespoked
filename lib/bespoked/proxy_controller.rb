@@ -6,7 +6,7 @@ module Bespoked
                   :entry_point,
                   :vhosts
 
-    def initialize(run_loop_in, entry_point_in)
+    def initialize(run_loop_in, entry_point_in, port)
       self.run_loop = run_loop_in
       self.entry_point = entry_point_in
       self.vhosts = {}

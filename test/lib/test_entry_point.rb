@@ -20,7 +20,7 @@ class TestEntryPoint < MiniTest::Spec
 
     @short_timeout = 10
     @never_timeout = 99999
-    @bespoked = Bespoked::EntryPoint.new(@run_loop, @logger)
+    @bespoked = Bespoked::EntryPoint.new(@run_loop, @logger, [], {"port" => 4443})
 
     #puts :done_before
   end

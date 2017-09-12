@@ -6,7 +6,8 @@ module Bespoked
                   :logger,
                   :proxy_controller,
                   :server,
-                  :shutdown_promises
+                  :shutdown_promises,
+                  :tls
 
     def initialize(run_loop_in, logger_in, proxy_controller_in, options={})
       self.shutdown_promises = {}
@@ -16,6 +17,8 @@ module Bespoked
 
       options[:BindAddress] ||= DEFAULT_LIBUV_SOCKET_BIND
       options[:Port] ||= raise Exception.new("must pass :Port")
+
+      self.tls = options[:Tls]
 
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
@@ -154,13 +157,10 @@ module Bespoked
         :stop
       end
 
+      if self.tls
+        client.start_tls #(tls_options)
+      end
 
-      #TODO: determine how to switch here based on if this is the ssl one or not...
-      #tls_options = {
-      #  :server => true,
-      #  :verify_peer => false
-      #}
-      client.start_tls #(tls_options)
       client.start_read
     end
 
