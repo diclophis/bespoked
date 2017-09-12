@@ -19,7 +19,6 @@ module Bespoked
                   :authenticated,
                   :stopping,
                   :heartbeat,
-                  :tls,
                   :tls_controller
 
     RECONNECT_WAIT = 2000
@@ -61,7 +60,7 @@ module Bespoked
       @list_of_resources_to_watch = list_of_resources_to_watch
 
       self.proxy_controller_factory_class = Bespoked.const_get(options["proxy-controller-factory-class"] || "RackProxyController")
-      self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self, options["port"])
+      self.proxy_controller =  self.proxy_controller_factory_class.new(@run_loop, self, options["port"], options["tls"])
 
       self.watch_factory_class = Bespoked.const_get(options["watch-factory-class"] || "KubernetesApiWatchFactory")
       self.watch_factory = @watch_factory_class.new(@run_loop, @logger)
@@ -70,9 +69,7 @@ module Bespoked
       self.health_controller = Bespoked::HealthController.new(@run_loop, @logger)
       self.dashboard_controller = Bespoked::DashboardController.new(@run_loop, @logger, @proxy_controller)
 
-      self.tls = options["tls"]
-
-      if @tls
+      if options["tls"]
         self.tls_controller = Bespoked::TlsController.new(@run_loop, @logger, proxy_controller)
       end
     end

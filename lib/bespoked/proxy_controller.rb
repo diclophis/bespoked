@@ -6,7 +6,7 @@ module Bespoked
                   :entry_point,
                   :vhosts
 
-    def initialize(run_loop_in, entry_point_in, port)
+    def initialize(run_loop_in, entry_point_in, port, tls)
       self.run_loop = run_loop_in
       self.entry_point = entry_point_in
       self.vhosts = {}
@@ -73,10 +73,6 @@ module Bespoked
       if metadata = description["metadata"]
         metadata["name"]
       end
-    end
-
-    def add_tls_host(private_key, cert_chain, host_name)
-      @entry_point.add_tls_host(private_key, cert_chain, host_name)
     end
 
     def extract_vhosts(description)

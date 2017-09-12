@@ -34,7 +34,7 @@ module Bespoked
     end
 
     def add_tls_host(private_key, cert_chain, host_name)
-      record :info, :add_tls_host, [private_key, cert_chain, host_name].inspect
+      record :info, :add_tls_host, [host_name].inspect
 
       temp_key = Tempfile.new('bespoked-tls-key')
       key_path = temp_key.path + ".keep"

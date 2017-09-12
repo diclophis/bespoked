@@ -28,7 +28,8 @@ require 'config/environment'
     {
       "proxy-controller-factory-class" => ENV["BESPOKED_PROXY_CLASS"],
       "watch-factory-class" => ENV["BESPOKED_WATCH_CLASS"],
-      "port" => 443
+      "port" => 443,
+      "tls" => true
     }
   )
 
