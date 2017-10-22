@@ -17,56 +17,49 @@ module Bespoked
     end
 
     def install(ingress_descriptions)
-      #@entry_point.record(:debug, :install_ingress_descriptions)
-
-      #@run_loop.log(:info, :proxy_controller_install, ingress_descriptions.keys)
-        #@run_loop.log(:info, :vhosts_extracted, vhosts_for_ingress)
-          #@run_loop.log(:info, :rack_proxy_vhost, [host, service_name, upstreams])
+      new_vhosts = {}
 
       ingress_descriptions.values.each do |ingress_description|
         vhosts_for_ingress = self.extract_vhosts(ingress_description)
         vhosts_for_ingress.each do |host, service_name, upstreams|
+          new_vhosts[host] = self.vhosts[host]
+          
           tried_dns = 0
+          got_dns_ok = false
 
           on_dns_ok = proc { |addrinfo|
-            #@entry_point.record(:debug, :on_dns_ok, [addrinfo])
-
+            got_dns_ok = true
             ip_address = addrinfo[0][0]
-            self.vhosts[host] = [upstreams[0], ip_address]
+            new_vhosts[host] = [upstreams[0], ip_address]
           }
 
           on_dns_bad = proc { |err|
-            @entry_point.record(:debug, :on_dns_bad, [host, service_name, err])
+            #@entry_point.record(:debug, :on_dns_bad, [host, service_name, err])
             #TODO: ????
           }
 
           try_dns_service_lookup = proc {
-            tried_dns += 1
-            #@entry_point.record(:debug, :try_dns, [host, service_name])
-
-            dns_timer = @run_loop.timer
-            dns_timer.progress do
-              if tried_dns < 4
-                try_dns_service_lookup.call
-              else
-                #TODO: ???? on_dns_bad.call(:timeout)
-              end
-            end
-            dns_timer.start(6000, 0)
-
             @run_loop.lookup(service_name, :IPv4, 59, :wait => false).then(on_dns_ok, on_dns_bad)
           }
 
-          #TODO: refactor?
-          #@run_loop.lookup(host, :IPv4, 59, :wait => false).then(on_dns_ok, on_dns_bad)
+          dns_timer = @run_loop.timer
+          dns_timer.progress do
+            #@entry_point.record(:debug, :dns_prog, [host, service_name, dns_timer])
+            tried_dns += 1
+            if tried_dns < 30 && got_dns_ok == false
+              try_dns_service_lookup.call
+            else
+              #TODO: ???? on_dns_bad.call(:timeout)
+              dns_timer.stop
+            end
+          end
+          dns_timer.start(1000, 0)
+
           try_dns_service_lookup.call
         end
       end
 
-      #vhosts = {}
-      #self.vhosts = vhosts
-
-      #@entry_point.record :info, :vhosts, @vhosts
+      self.vhosts = new_vhosts
     end
 
     def extract_name(description)

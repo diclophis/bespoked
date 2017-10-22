@@ -120,7 +120,7 @@ module Bespoked
 
       #self.record :info, :checksum, [old_checksum, @checksum] if changed
 
-      return changed
+      return true #changed
     end
 
     def on_failed_to_auth_cb

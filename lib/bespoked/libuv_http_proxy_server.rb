@@ -86,6 +86,9 @@ module Bespoked
 
       ##install_shutdown_promise(client)
 
+      recon_timer = @run_loop.timer
+      halt_timer = @run_loop.timer
+
       http_parser = Http::Parser.new
       reading_state = :request_to_proxy
       body_left_over = nil
@@ -123,36 +126,52 @@ module Bespoked
 
         env = {"HTTP_HOST" => (http_parser.headers["host"] || http_parser.headers["Host"])}
 
-        if env["HTTP_HOST"]
-          url = nil
-          in_url = URI.parse("http://" + env["HTTP_HOST"])
+        on_did_connect = do_new_thing(host, http_parser, client, new_client, body_left_over, recon_timer, halt_timer)
 
-          #[{:date=>2017-05-16 08:18:49 +0000, :level=>:debug, :name=>:up_up_up, :message=>"[[\"attalos-bosh.bardin.haus\", \"webdav.bardin.haus\", \"bardin.haus\", \"attalos.bardin.haus\"]]"}]
-          #record :debug, :up_up_up, [@proxy_controller.vhosts.keys]
-
-          service_host, ip_address = @proxy_controller.vhosts[in_url.host]
-
-          if service_host && ip_address
-            url = URI.parse("http://" + service_host) #NOTE: wtf?
-          end
-
-          #TODO: make this not a super-nested proc somehow
-          if url
-            host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
-            port = url.port
-            @run_loop.next_tick do
-              #record :debug, :si, [host, port, ip_address]
-
-              do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
-            end
-
-            handled = true
-          end
-        end
-
-        unless handled
+        halt_timer.progress do
+          recon_timer.stop
           halt_connection(client, 404, [:no_service_found, @proxy_controller.vhosts.keys])
         end
+
+        do_recon = proc {
+          record :debug, :do_recon_call, [recon_timer].inspect
+          recon_timer.start(1000, 0)
+
+          if env["HTTP_HOST"]
+            url = nil
+            in_url = URI.parse("http://" + env["HTTP_HOST"])
+
+            service_host, ip_address = @proxy_controller.vhosts[in_url.host]
+
+            if service_host && ip_address
+              url = URI.parse("http://" + service_host) #NOTE: wtf?
+            end
+
+            record :debug, :up_up_up, [@proxy_controller.vhosts.keys, in_url.host, service_host, ip_address, url]
+
+            if url
+              host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
+              port = url.port
+              handled = true
+            end
+          end
+
+          if handled
+            @run_loop.next_tick do
+              new_client.connect(ip_address, port.to_i, on_did_connect)
+            end
+          else
+            recon_timer.stop
+            halt_connection(client, 404, [:no_service_found, @proxy_controller.vhosts.keys])
+          end
+        }
+
+        recon_timer.progress do
+          do_recon.call
+        end
+
+        halt_timer.start(30 * 1000, 0)
+        do_recon.call
       
         :stop
       end
@@ -163,12 +182,6 @@ module Bespoked
 
       client.start_read
     end
-
-#foop    def (
-#      new_client.write(request_to_upstream, {:wait =>  :promise}).then { |b|
-#      }.catch { |e|
-#        halt_connection(client, 500, :halted_upstream_closed)
-#      }
 
     #TODO: merge with
     def header_stack(http_parser, client)
@@ -249,8 +262,6 @@ module Bespoked
     def other_twang(http_parser, new_client, client, body_left_over)
       request_to_upstream = construct_upstream_request(http_parser, client, body_left_over)
 
-      #new_client.start_read
-
       write_chunk_to_socket(new_client, request_to_upstream)
     end
 
@@ -262,61 +273,32 @@ module Bespoked
       write_chunk_to_socket(client, chunk) unless client.closed?
     end
 
-    def do_new_thing(host, port, http_parser, client, new_client, ip_address, body_left_over)
-      #TODO: ???
-      #record :debug, :do_new_thing, [new_client].inspect
-
-      #TODO: !!!! this can timeout !!!!!
-      new_client.connect(ip_address, port.to_i, &proc {
-        #record :debug, :connected_upstream, [ip_address].inspect
+    def do_new_thing(host, http_parser, client, new_client, body_left_over, recon_timer, halt_timer)
+      proc {
+        record :debug, :connected_upstream, [host].inspect
+        recon_timer.stop
+        halt_timer.stop
+        sp = install_shutdown_promise(client)
+        sp.stop
 
         new_client.finally do |err|
           sp = install_shutdown_promise(client)
-          #record :debug, :upstream_server_closed, [].inspect
-          #####record :debug, :sp_one, [client.class, client].inspect
-          ##sp.promise.progress do
-          ##  record :info, :upstream_server_closed_and_closed, []
-          ###  ##this possibly breaks response on upload
-          ##  client.close
-          ##end
-          ##install_shutdown_promise(client).notify
           sp.stop
           sp.start(1000, 0)
         end
 
-        #new_client.progress(&method(:on_client_progress).curry[client])
-
         new_client.progress do |chunk|
-        #  #write_chunk_to_socket(client, chunk) #unless client.closed?
           on_client_progress(client, chunk)
         end
 
-=begin
-
-      #TODO: !!!! this can timeout !!!!!
-      new_client.connect(ip_address, port.to_i, &proc {
-        record :debug, :connected_up, [ip_address].inspect
-
-        other_twang(http_parser, new_client, client, body_left_over)
-      })
-=end
-      ##################
-
         new_client.catch do |err|
           record :debug, :new_client_catch, [err, err.class].inspect
-          #canceled_dns = err.is_a?(Libuv::Error::ECANCELED)
-          #if canceled_dns
-          #  record :debug, :canceled_dns, [err].inspect
-          #  #try_dns_service_lookup.call
-          #else
-          #  halt_connection(client, 500, [err, err.backtrace, :proxy_client_error])
-          #end
         end
 
         new_client.start_read
 
         other_twang(http_parser, new_client, client, body_left_over)
-      })
+      }
     end
 
     def halt_connection(client, status, reason)
