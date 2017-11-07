@@ -12,9 +12,12 @@ $(shell mkdir -p $(BUILD))
 MANIFEST_TMP=$(BUILD)/manifest.yml
 
 #.INTERMEDIATE: $(MANIFEST_TMP)
-.PHONY: image uninstall clean
+.PHONY: image uninstall clean test
 
 all: $(BUILD)/$(IMAGE_TAG) install
+
+test:
+	bundle exec rake test
 
 image:
 	docker build -f Dockerfile.bespoked -t $(IMAGE) .
@@ -28,7 +31,7 @@ install: $(MANIFEST_TMP)
 	kubectl apply -f $(MANIFEST_TMP)
 	# kubectl rolling-update bespoked-replication-controller --image=$(IMAGE) --image-pull-policy=IfNotPresent --update-period=9s --poll-interval=3s
 
-$(MANIFEST_TMP): manifest.rb kubernetes/rc.yml $(BUILD)/$(IMAGE_TAG)
+$(MANIFEST_TMP): kubernetes/rc.yml $(BUILD)/$(IMAGE_TAG)
 	bundle exec syncretizer kubernetes/rc.yml "$(REPO)" $(IMAGE_NAME) $(IMAGE_TAG) > $(MANIFEST_TMP)
 
 uninstall:

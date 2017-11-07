@@ -2,24 +2,40 @@ $global_logger = nil
 
 module Bespoked
   class Logger < ::Logger
-    def initialize(io)
-      @io = io
+    def initialize(io_in, run_loop_in)
+      @io = io_in
+      @run_loop = run_loop_in
       $global_logger = self
-    end
+      @libuv_logger = @run_loop.defer
 
-    def start(run_loop)
-      @stdout_pipe = run_loop.pipe
-      @stdout_pipe.open(@io.fileno)
+      @promise = @libuv_logger.promise
 
-      @libuv_logger = run_loop.defer
-      @libuv_logger.promise.progress do |log_entry|
-        @stdout_pipe.write(log_entry)
-        @stdout_pipe.write($/)
+      @promise.progress do |log_entry|
+        if @pipe
+          @pipe.write(log_entry)
+          @pipe.write($/)
+        else
+          @libuv_logger.notify(log_entry)
+        end
       end
     end
 
+    def start
+      #$stdout.puts "??3"
+      @pipe = @run_loop.pipe
+      @pipe.open(@io.fileno)
+    end
+
+    def shutdown
+      #$stdout.puts "??3"
+      @pipe.shutdown
+    end
+
     def add(sev, thing, msg)
+      #$stderr.puts [sev, thing, msg].inspect
+
       @libuv_logger.notify(msg)
+
       false
     end
 
@@ -40,7 +56,7 @@ module Bespoked
 		#flush must be called without arguments and must be called in order to make the error appear for sure.
 		def flush
 			#add(1, nil, "flush")
-      #@stdout_pipe.flush
+      #@pipe.flush
 		end
 
 		#close must never be called on the error stream.

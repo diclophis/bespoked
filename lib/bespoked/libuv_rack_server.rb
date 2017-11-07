@@ -63,18 +63,19 @@ module Bespoked
       self.server = @run_loop.tcp(flags: Socket::AF_INET6 | Socket::AF_INET)
 
       @server.catch do |reason|
-        record :debug, :rack_server_catch, [reason]
+        #record :debug, :rack_server_catch, [reason]
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
         defer_until_after_body = @run_loop.defer
         defer_until_after_body.promise.progress do |request_depth|
-          record :try_to_recurse, []
+          #record :try_to_recurse, []
           #handle_client(defer_until_after_body, client, request_depth)
         end
 
         handle_client(defer_until_after_body, client, 0)
       end
+      #record :server_bound, [self.class, app_in]
     end
 
     def record(level = nil, name = nil, message = nil)
@@ -181,12 +182,16 @@ module Bespoked
 
       status, headers, body = @app.call(env)
 
-      crang(nil, client, status, headers, body, env).promise.progress do |sdsd|
-        callback_defer.close
+      crang(nil, client, status, headers, body, env).promise.progress do |_unused|
+        #WTF?
+        client.close #unless keep_alive
+        #callback_defer.close
       end
     end
 
     def handle_client(retry_defer, client, request_depth)
+      #record :handle_client, []
+
       outer_io = StringIO.new
       outer_io.set_encoding('ASCII-8BIT')
 
@@ -200,23 +205,29 @@ module Bespoked
       end
 
       outer_http_parser.on_message_complete = proc do |env|
-        callback = @run_loop.async do
+        #callback = @run_loop.async do
+        callback = nil
+
+        @run_loop.work do
           foop(outer_http_parser, outer_io, client, callback, request_depth)
         end
 
-        @run_loop.work(proc {
-          callback.call
-        })
+        #end
+
+        #@run_loop.work(proc {
+        #  callback.call
+        #})
       end
 
       # HTTP headers available
       outer_http_parser.on_headers_complete = proc do
-        record :on_headers, [outer_http_parser.headers]
+        #record :on_headers, [outer_http_parser.headers]
       end
 
       ##################
 
       client.progress do |chunk|
+        #record :client_progress, [chunk]
         offset_of_body_left_in_buffer = outer_http_parser << chunk
       end
 
@@ -234,6 +245,7 @@ module Bespoked
 
       #TODO: figure out this case
       keep_alive = headers["Connection"]
+      #logger.notify(:headers => headers)
 
       wrote_defer = @run_loop.defer
       thang(client, response, keep_alive, wrote_defer) unless client.closed?
@@ -268,12 +280,16 @@ module Bespoked
 
     def thang(client, chunk, keep_alive, wrote_defer)
       if client && chunk && chunk.length > 0
+        #logger.notify(:ONCE => :ONCE)
         client.write(chunk, {:wait => :promise}).then { |a|
-          client.close unless keep_alive
-          wrote_defer.notify(:step)
+          #client.close unless keep_alive
+          #puts a.inspect
+          #logger.notify(:then => keep_alive)
+          #wrote_defer.notify(:step) if keep_alive == "close"
         }.catch { |e|
-          should_close = e.is_a?(Libuv::Error::ECANCELED)
-          client.close if should_close
+          logger.notify(:catch => e)
+          #should_close = e.is_a?(Libuv::Error::ECANCELED)
+          #client.close if should_close
         }
       end
     end

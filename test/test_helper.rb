@@ -11,7 +11,7 @@ require 'minitest/mock'
 class MiniTest::Spec
   # Add more helper methods to be used by all tests here...
 
-  def install_failsafe_timeout(run_loop, failsafe_after_ms = 3000)
+  def install_failsafe_timeout(run_loop, failsafe_after_ms = 6000)
     @did_failsafe_timeout = false
 
     @failsafe_timeout = run_loop.timer

@@ -1,20 +1,24 @@
 require_relative '../test_helper'
 
 class LibUVHttpProxyServerTest < MiniTest::Spec
+
   MOCK_HTTP_REQUEST = <<-HERE
 GET /first HTTP/1.1
 Host: localhost
 User-Agent: minitest/ruby
 Accept: */png
-Connection: keep-alive
-
-GET /second HTTP/1.1
-Host: localhost
-User-Agent: minitest/ruby
-Accept: */txt
-Connection: keep-alive
+Connection: close
 
 HERE
+
+#Keep-Alive
+#GET /second HTTP/1.1
+#Host: localhost
+#User-Agent: minitest/ruby
+#Accept: */txt
+#Connection: Keep-Alive
+##
+#HERE
 
 =begin
 GET /second HTTP/1.1
@@ -28,7 +32,7 @@ Connection: keep-alive
 =end
 
   before do
-    @run_loop = Libuv::Reactor.new
+    @run_loop = RUN_LOOP_CLASS.new
 
     install_failsafe_timeout(@run_loop)
 
@@ -41,21 +45,32 @@ Connection: keep-alive
     }
 
     @called_upstream = 0
-    @mock_upstream_app = proc { |env|
-      #[200, {"Content-Type" => "text"}, ["example rack handler"]]
-      @called_upstream += 1
-      [200, {"Content-Type" => "text/event-stream"}, ["example rack handler"]]
-    }
+    @got_data = 0
+    @times = 2 * 1024 * 4
+    @t = "0" * @times
+    @length = @t.length
 
-    @logger = Bespoked::Logger.new(STDERR)
+    @content = [@t] * @times
+    @content_length = 0
+    @content.each do |chunk|
+      @content_length += chunk.length
+    end
+
+    @mock_upstream_app = (proc { |env|
+      @called_upstream += 1
+      [200, {"Content-Type" => "text/plain", "Content-Length" => @content_length.to_s, "Connection" => "close"}, @content]
+    })
+
+    @logger = Bespoked::Logger.new(STDERR, @run_loop)
+    @logger.start
     @mock_upstream_server = Bespoked::LibUVRackServer.new(@run_loop, @logger, @mock_upstream_app, @mock_upstream_options)
 
-    @mock_proxy_controller = Bespoked::ProxyController.new(@run_loop, nil)
+    @mock_proxy_controller = Bespoked::ProxyController.new(@run_loop, nil, @mock_instream_options[:Port], false)
     @mock_proxy_controller.vhosts = {
-      "localhost" => "localhost:#{@mock_upstream_options[:Port]}"
+      "localhost" => ["localhost:#{@mock_upstream_options[:Port]}", "127.0.0.1"]
     }
 
-    @http_proxy_server = Bespoked::LibUVHttpProxyServer.new(@run_loop, nil, @mock_proxy_controller, @mock_instream_options)
+    @http_proxy_server = Bespoked::LibUVHttpProxyServer.new(@run_loop, @logger, @mock_proxy_controller, @mock_instream_options)
   end
 
   after do
@@ -68,49 +83,79 @@ Connection: keep-alive
     cancel_failsafe_timeout
   end
 
-  describe "initialize" do
-    it "has a libuv runloop" do
-      @http_proxy_server.run_loop.must_be_kind_of Libuv::Reactor
-    end
-  end
-
-#< HTTP/1.1 302 Moved Temporarily
-#< Server: nginx
-#< Date: Tue, 29 Nov 2016 03:23:25 GMT
-#< Content-Type: text/html
-#< Connection: keep-alive
-#< Content-Length: 154
-#< Location: https://medium.com/foo/@mavenlink
+  ##TODO: figure out close situation
+  #describe "initialize" do
+  #  it "has a libuv runloop" do
+  #    @run_loop.run do
+  #      @http_proxy_server.run_loop.must_be_kind_of Libuv::Reactor
+  #    end
+  #  end
+  #end
 
   describe "http proxy service" do
     it "redirects and proxies all requests to an upstream http server" do
+
       @run_loop.run do
-        @logger.start(@run_loop)
         @mock_upstream_server.start
         @http_proxy_server.start
       
         client = @run_loop.tcp
 
-        client.catch do |reason|
-          #client.shutdown
+        http_parser = Http::Parser.new
+        http_parser.on_headers_complete = proc do
+          #@logger.puts [:http_parser, http_parser.inspect, http_parser.headers]
+
+          if http_parser.upgrade_data && http_parser.upgrade_data.length > 0
+            #request_to_upstream.concat(http_parser.upgrade_data)
+            #@logger.puts [:http_parser_upgrade_data, http_parser.upgrade_data]
+          end
         end
 
-        client.progress do |data|
-          @logger.puts [:called_upstream, @called_upstream].inspect
+        http_parser.on_body = proc do |chunk|
+          # One chunk of the body
+          #@logger.puts [:on_body, chunk.length]
+          @got_data += chunk.length
+        end
+
+        http_parser.on_message_complete = proc do |env|
+          # Headers and body is all parsed
+          #@logger.puts [:on_complete, env.inspect, @got_data, (@length * @times)]
+          if @got_data == (@length * @times)
+            client.close
+          end
+        end
+
+        client.catch do |reason|
+          @logger.puts [:client_caught_exception, reason]
+        end
+
+        client.progress do |chunk|
+          #@logger.puts [:called_upstream, @called_upstream, chunk.length, @got_data].inspect
+
+          if chunk && chunk.length > 0
+            offset_of_body_left_in_buffer = http_parser << chunk
+            body_left_over = chunk[offset_of_body_left_in_buffer, (chunk.length - offset_of_body_left_in_buffer)]
+          end
         end
 
         # close the handle
         client.finally do
+          #@logger.puts [:finally]
           @run_loop.stop
         end
 
         client.connect(Bespoked::DEFAULT_LIBUV_SOCKET_BIND, @mock_instream_options[:Port]) do
-          client.write(MOCK_HTTP_REQUEST, wait: true)
+          #client.start_tls
           client.start_read
+
+          client.write(MOCK_HTTP_REQUEST, {:wait => :promise}).then { |a|
+            #@logger.puts [:wrote_reqs, @called_upstream].inspect
+          }
         end
       end
 
-      @called_upstream.must_equal 2
+      @called_upstream.must_equal 1
+      @got_data.must_equal ((@length * @times * 1))
     end
   end
 end

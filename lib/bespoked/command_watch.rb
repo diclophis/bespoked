@@ -4,6 +4,7 @@ module Bespoked
   class CommandWatch < Watch
     attr_accessor :run_loop
 
+    #TODO: logger, and makes this function
     def initialize(run_loop_in)
       self.run_loop = run_loop_in
     end
@@ -11,7 +12,7 @@ module Bespoked
     def create(resource_kind, defer, json_parser)
       defer.resolve(true)
 
-      combined = ["ssh", "provision@jenkins-master01.staging.mavenlink.net", "kubectl", "get", "-o=json", "-w", resource_kind]
+      combined = ["kubectl", "get", "-o=json", "-w", resource_kind]
       stdin, stdout, stderr, process_waiter = Open3.popen3(*combined)
 
       stdout_pipe = @run_loop.pipe

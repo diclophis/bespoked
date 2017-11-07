@@ -1,89 +1,243 @@
+##---
+##kind: Service
+##apiVersion: v1
+##metadata:
+##  annotations:
+##    #service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
+##    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:us-west-1:214670627126:certificate/8eba4e40-2eb5-459b-8c97-c97b71f62f5c
+##    service.beta.kubernetes.io/aws-load-balancer-ssl-ports: "443"
+##    #service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+##    service.beta.kubernetes.io/aws-load-balancer-connection-idle-timeout: "120"
+##  name: bespoked-service
+##  namespace: default
+##spec:
+##  selector:
+##    k8s-app: bespoked
+##  type: LoadBalancer
+##  ports:
+##  - nodePort: 30080
+##    port: 80
+##    targetPort: tls-incoming
+##    protocol: TCP
+##    name: lets-encrypt-comms
+##
+##  - nodePort: 30088
+##    port: 88
+##    targetPort: dash-incoming
+##    protocol: TCP
+##    name: public-stats-comms
+##
+##  - nodePort: 30443
+##    port: 443
+##    targetPort: ing-incoming
+##    protocol: TCP
+##    name: kubernetes-ingress-comms
+##
+##  - nodePort: 30444
+##    port: 444
+##    targetPort: ingtls-incoming
+##    protocol: TCP
+##    name: lets-encrypt-ingress-comms
 ---
 apiVersion: v1
-kind: Service
+kind: ServiceAccount
 metadata:
-  name: bespoked-service
+  name: ingress-controller
   namespace: default
-spec:
-  # The default backend must be of type NodePort.
-  type: NodePort
-  ports:
-  - nodePort: 80
-    port: 8888
-    targetPort: 8888
-    protocol: TCP
-    name: http
-  selector:
-    k8s-app: bespoked
 ---
-apiVersion: v1
-kind: Service
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: bespoked-health-service
+  name: ingress-controller
   namespace: default
-spec:
-  # The default backend must be of type NodePort.
-  type: NodePort
-  ports:
-  - nodePort: 30002
-    port: 8889
-    targetPort: 8889
-    protocol: TCP
-    name: http
-  selector:
-    k8s-app: bespoked
+rules:
+- apiGroups:
+  - ""
+  - "extensions"
+  resources:
+  - configmaps
+  - secrets
+  - services
+  - endpoints
+  - ingresses
+  - nodes
+  - pods
+  verbs:
+  - list
+  - get
+  - watch
+- apiGroups:
+  - "extensions"
+  - ""
+  resources:
+  - ingresses
+  - ingresses/status
+  verbs:
+  - get
+  - update
+  - create
+  - list
+  - patch
+  - delete
+  - watch
+- apiGroups:
+  - "*"
+  - ""
+  resources:
+  - events
+  - certificates
+  - secrets
+  verbs:
+  - create
+  - list
+  - update
+  - get
+  - patch
+  - watch
 ---
-apiVersion: v1
-kind: Service
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: bespoked-dashboard-service
+  name: ingress-controller
   namespace: default
-spec:
-  # The default backend must be of type NodePort.
-  type: NodePort
-  ports:
-  - nodePort: 30003
-    port: 8890
-    targetPort: 8890
-    protocol: TCP
-    name: http
-  selector:
-    k8s-app: bespoked
+subjects:
+  - kind: ServiceAccount
+    namespace: default
+    name: ingress-controller
+roleRef:
+  kind: ClusterRole
+  name: ingress-controller
+  apiGroup: rbac.authorization.k8s.io
+#---
+#apiVersion: v1
+#kind: ReplicationController
+#metadata:
+#  name: bespoked-replication-controller
+#  namespace: default
+#  labels:
+#    k8s-app: bespoked
+#spec:
+#  #TODO: make this possible to have more than 1 controller alive simultaneously.
+#  replicas: 1
+#  selector:
+#    k8s-app: bespoked
+#    version: rv1 #NOTE: this is re-written
+#  template:
+#    metadata:
+#      namespace: default
+#      labels:
+#        k8s-app: bespoked
+#        version: rv1 #NOTE: this is re-written
+#    spec:
+#      terminationGracePeriodSeconds: 5
+#      serviceAccount: ingress-controller
+#      containers:
+#      - image: #NOTE: this is re-written via manifest.rb
+#        imagePullPolicy: IfNotPresent
+#        ports:
+#        - name: ing-incoming
+#          containerPort: 55001
+#        - name: dash-incoming
+#          containerPort: 55002
+#        - name: tls-incoming
+#          containerPort: 55101
+#        - name: ingtls-incoming
+#          containerPort: 55102
+#        #livenessProbe:
+#        #  exec:
+#        #    command:
+#        #    - /bin/true
+#        #readinessProbe:
+#        #  exec:
+#        #    command:
+#        #    - /bin/true
+#        #readinessProbe:
+#        #  httpGet:
+#        #    path: /healthz
+#        #    port: 55101
+#        #    scheme: HTTP
+#        #livenessProbe:
+#        #  httpGet:
+#        #    path: /healthz
+#        #    port: 55101
+#        #    scheme: HTTP
+#        #  #initialDelaySeconds: 30
+#        #  #timeoutSeconds: 45
+#        #  #periodSeconds: 120
+#        #  #successThreshold: 1
+#        #  #failureThreshold: 128
+#        env:
+#        - name: HTTP_X_FORWARDED_PROTO
+#          value: "https"
+#        name: bespoked-controller
+#        resources:
+#          #limits:
+#          #  cpu: 2400m
+#          #  memory: 400Mi
+#          requests:
+#            cpu: 500m
+#            memory: 500Mi
+#        command: ["bundle", "exec", "ruby", "main.rb"]
 ---
-apiVersion: v1
-kind: ReplicationController
+apiVersion: extensions/v1beta1
+kind: Deployment
 metadata:
-  name: bespoked-replication-controller
-  namespace: default
+  name: bespoked-ingress-controller
   labels:
-    k8s-app: bespoked
+    k8s-app: bespoked-ingress-controller
+  namespace: default
 spec:
-  #TODO: make this possible to have more than 1 controller alive simultaneously.
   replicas: 1
-  selector:
-    k8s-app: bespoked
-    version: rv1 #NOTE: this is re-written
   template:
     metadata:
-      namespace: default
       labels:
-        k8s-app: bespoked
-        version: rv1 #NOTE: this is re-written
+        k8s-app: bespoked-ingress-controller
     spec:
-      terminationGracePeriodSeconds: 600
-      serviceAccount: default
+      # hostNetwork makes it possible to use ipv6 and to preserve the source IP correctly regardless of docker configuration
+      # however, it is not a hard dependency of the nginx-ingress-controller itself and it may cause issues if port 10254 already is taken on the host
+      # that said, since hostPort is broken on CNI (https://github.com/kubernetes/kubernetes/issues/31307) we have to use hostNetwork where CNI is used
+      # like with kubeadm
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      serviceAccount: ingress-controller
+      terminationGracePeriodSeconds: 60
       containers:
-      - image: #NOTE: this is re-written via manifest.rb
+      - image: rewrite
         imagePullPolicy: IfNotPresent
+        name: bespoked-ingress-controller
+        #readinessProbe:
+        #  httpGet:
+        #    path: /healthz
+        #    port: 10254
+        #    scheme: HTTP
+        #livenessProbe:
+        #  httpGet:
+        #    path: /healthz
+        #    port: 10254
+        #    scheme: HTTP
+        #  initialDelaySeconds: 10
+        #  timeoutSeconds: 1
+        ports:
+        - hostPort: 80
+          containerPort: 80
+        - hostPort: 443
+          containerPort: 443
+#        - name: ing-incoming
+#          containerPort: 55001
+#        - name: dash-incoming
+#          containerPort: 55002
+#        - name: tls-incoming
+#          containerPort: 55101
+#        - name: ingtls-incoming
+#          containerPort: 55102
         env:
-        - name: HTTP_EXAMPLE_X_FORWARDED_PROTO
+        - name: HTTP_X_FORWARDED_PROTO
           value: "https"
-        name: bespoked-controller
         resources:
-          limits:
-            cpu: 1200m
-            memory: 200Mi
-          requests:
-            cpu: 200m
-            memory: 100Mi
+          #limits:
+          #  cpu: 2400m
+          #  memory: 400Mi
+          #requests:
+          #  cpu: 500m
+          #  memory: 500Mi
         command: ["bundle", "exec", "ruby", "main.rb"]

@@ -40,13 +40,13 @@ module Bespoked
         foo = run_loop.timer
         foo.progress do
           #TODO: figure this out...
-          DRb.thread.run if DRb.thread
+          #DRb.thread.run if DRb.thread
         end
         foo.start(1, 1)
 
         run_loop.prepare {
           #TODO: figure this out...
-          DRb.thread.run if DRb.thread
+          #DRb.thread.run if DRb.thread
         }.start
       end
     end

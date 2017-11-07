@@ -2,14 +2,20 @@
 require 'yaml'
 require 'open3'
 require 'digest/md5'
-require 'libuv'
-require 'libuv/coroutines'
+
+#require 'libuv'
+#require 'libuv/coroutines'
+
 require 'http/parser'
 require 'yajl'
 require 'rack'
 require 'rack/handler'
 require 'socket'
 require 'webrick'
+require 'tempfile'
+require 'base64'
+require 'acme-client'
+require 'openssl'
 
 module Bespoked
   DEFAULT_LIBUV_SOCKET_BIND = "0:0:0:0:0:0:0:0"
@@ -36,7 +42,10 @@ module Bespoked
   autoload :RackProxyController, 'bespoked/rack_proxy_controller'
   autoload :HealthController, 'bespoked/health_controller'
   autoload :DashboardController, 'bespoked/dashboard_controller'
+  autoload :TlsController, 'bespoked/tls_controller'
 
   # generic rack support
   autoload :RackHandler, 'bespoked/rack_handler'
+
+  autoload :RunLoop, 'bespoked/run_loop.rb'
 end

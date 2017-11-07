@@ -1,4 +1,5 @@
 FROM alpine:3.4
+RUN echo 0000000004
 RUN apk update && apk upgrade && apk add openssl openssl-dev build-base ruby ruby-dev ruby-irb ruby-bundler nginx libffi-dev libuv libuv-dev git python
 RUN touch /tmp/000
 RUN gem install bundler -v 1.13.6 --no-rdoc --no-document
@@ -11,3 +12,4 @@ USER bespoked
 RUN bundle install --force --path=vendor/bundle --jobs=4 --retry=3 --deployment
 ADD . /home/bespoked
 CMD ["bundle", "exec" "ruby", "/home/bespoked/main.rb"]
+USER root

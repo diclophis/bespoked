@@ -1,5 +1,6 @@
 #
 
+#TODO
 module Bespoked
   class DebugWatchFactory < WatchFactory
     UPSTREAM_HOST = "127.0.0.1"
@@ -86,7 +87,7 @@ module Bespoked
       fake_authentication_timeout = @run_loop.timer
       fake_authentication_timeout.progress do
         retries += 1
-        http_ok = (retries > 3)
+        http_ok = (retries > 3) #TODO: spec this
 
         if http_ok
           new_watch.waiting_for_authentication.resolve(http_ok)

@@ -3,3 +3,6 @@ kubernetes/api.token
 kubernetes/ca.crt
 vendor/bundle
 .bundle
+
+.ruby-gemset
+.ruby-version

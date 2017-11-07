@@ -1,0 +1,31 @@
+---
+#kind: Service
+#apiVersion: v1
+#metadata:
+#  annotations:
+#    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: '*'
+#  name: api-service
+#  namespace: kube-system
+#spec:
+#  selector:
+#    component: apiserver
+#  type: LoadBalancer
+#  ports:
+#  - port: 6443
+#    targetPort: https
+#
+#apiVersion: v1
+#kind: Service
+#metadata:
+#  labels:
+#    component: apiserver
+#    provider: kubernetes
+#  name: kubernetes-elb
+#  namespace: default
+#spec:
+#  ports:
+#  - name: https
+#    port: 443
+#    protocol: TCP
+#    targetPort: 6443
+#  type: LoadBalancer
