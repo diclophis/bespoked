@@ -13,3 +13,5 @@ BESPOKED_WATCH_CLASS=DebugWatch BESPOKED_PROXY_CLASS=RackProxy bundle exec ruby 
 # todo
 
 handle un-expected `Expect: 100-continue`
+
+test build
