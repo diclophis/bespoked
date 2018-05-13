@@ -22,8 +22,8 @@ module Bespoked
       # We need an ACME server to talk to, see github.com/letsencrypt/boulder
       # WARNING: This endpoint is the production endpoint, which is rate limited and will produce valid certificates.
       # You should probably use the staging endpoint for all your experimentation:
-      endpoint = 'https://acme-staging.api.letsencrypt.org/'
-      #endpoint = 'https://acme-v01.api.letsencrypt.org/'
+      #endpoint = 'https://acme-staging.api.letsencrypt.org/'
+      endpoint = 'https://acme-v01.api.letsencrypt.org/'
 
       # Initialize the client
       client = Acme::Client.new(private_key: private_key, endpoint: endpoint, connection_options: { request: { open_timeout: 5, timeout: 5 } })

@@ -11,12 +11,12 @@ module Bespoked
       @promise = @libuv_logger.promise
 
       @promise.progress do |log_entry|
-        if @pipe
-          @pipe.write(log_entry)
-          @pipe.write($/)
-        else
-          @libuv_logger.notify(log_entry)
-        end
+        #if @pipe
+        #  @pipe.write(log_entry)
+        #  @pipe.write($/)
+        #else
+        #  @libuv_logger.notify(log_entry)
+        #end
       end
     end
 
@@ -34,7 +34,7 @@ module Bespoked
     def add(sev, thing, msg)
       #$stderr.puts [sev, thing, msg].inspect
 
-      @libuv_logger.notify(msg)
+      #@libuv_logger.notify(msg)
 
       false
     end

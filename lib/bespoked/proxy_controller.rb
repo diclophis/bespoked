@@ -30,6 +30,7 @@ module Bespoked
           on_dns_ok = proc { |addrinfo|
             got_dns_ok = true
             ip_address = addrinfo[0][0]
+            @entry_point.record(:debug, :on_dns, [host, service_name, ip_address])
             new_vhosts[host] = [upstreams[0], ip_address]
           }
 

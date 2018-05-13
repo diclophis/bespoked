@@ -14,8 +14,8 @@ module Bespoked
 
     #TODO: make this an include moduled?
     def record(level = nil, name = nil, message = nil)
-      log_event = {:date => Time.now, :level => level, :name => name, :message => message}
-      @logger.notify(log_event)
+      #log_event = {:date => Time.now, :level => level, :name => name, :message => message}
+      #@logger.notify(log_event)
     end
 
     def create(resource_kind, authentication_timeout = 1)
