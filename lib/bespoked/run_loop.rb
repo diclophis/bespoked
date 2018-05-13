@@ -7,7 +7,7 @@ module Bespoked
     end
 
     def notify(*args)
-      puts [:pnoti, args].inspect
+      #puts [:pnoti, args].inspect
       return "pnoti"
     end
   end
@@ -41,7 +41,7 @@ module Bespoked
     end
 
     def then(&block)
-      puts [:tthen, @args, block].inspect
+      #puts [:tthen, @args, block].inspect
 
       self.on_then = block
 
@@ -51,7 +51,7 @@ module Bespoked
 
   class Catch
     def catch(*args)
-      puts [:ccatch, args].inspect
+      #puts [:ccatch, args].inspect
     end
   end
 
@@ -84,19 +84,19 @@ module Bespoked
     end
 
     def open(*args)
-      puts [:topen]
+      #puts [:topen]
 
       return "topen"
     end
 
     def catch(*args)
-      puts [:tcatch]
+      #puts [:tcatch]
 
       return "tcatch"
     end
 
     def bind(*args, &block)
-      puts [:tbind, self.object_id, args, block].inspect
+      #puts [:tbind, self.object_id, args, block].inspect
       #"0:0:0:0:0:0:0:0", 55003
       self.io ||= TCPServer.new(args[0], args[1])
 
@@ -119,7 +119,8 @@ module Bespoked
     end
 
     def connect(*args)
-      puts [:tconn, args].inspect
+      #puts [:tconn, args].inspect
+
       @io ||= TCPSocket.new(args[0], args[1])
 
       yield
@@ -128,7 +129,7 @@ module Bespoked
     end
 
     def start_read
-      puts :start_read
+      #puts :start_read
     end
 
     def write(chunk, other = nil)
@@ -153,7 +154,7 @@ module Bespoked
 
         #if @input_buffer.eof?
           @write_thens.each do |write_then|
-            puts :write_thens
+            #puts :write_thens
             write_then.on_then.call(nil) if write_then.on_then
           end
 
@@ -168,7 +169,7 @@ module Bespoked
     end
 
     def close(*args)
-      puts [:tclos, self.object_id, args].inspect
+      #puts [:tclos, self.object_id, args].inspect
       @io.close
 
       return "tclos"
@@ -219,7 +220,7 @@ module Bespoked
         if @on_progress
           if recvd = @io.read_nonblock(1024)
             if recvd.length > 0
-              puts [:recvd, @on_progress].inspect
+              #puts [:recvd, @on_progress].inspect
               @on_progress.call(recvd)
             end
           end
@@ -230,7 +231,7 @@ module Bespoked
     rescue EOFError => e
       @io.close
     rescue IOError => e
-      puts [:read_call, e].inspect
+      #puts [:read_call, e].inspect
     end
 
     def finally(*args)
@@ -242,7 +243,7 @@ module Bespoked
     attr_accessor :active
 
     def initialize(args = {})
-      puts [:tinit, args].inspect
+      #puts [:tinit, args].inspect
 
     end
 
@@ -265,7 +266,7 @@ module Bespoked
 
   class Notifier
     def notifier(*args)
-      puts [:nnotifer, args].inspect
+      #puts [:nnotifer, args].inspect
     end
   end
 
@@ -283,7 +284,7 @@ module Bespoked
     end
 
     def run(*args)
-      puts args.inspect
+      #puts args.inspect
 
       #sleep 1
 
@@ -314,14 +315,14 @@ module Bespoked
           writable_io.perform_write_callbacks
         end
 
-        puts [errored].inspect if errored.length > 0
+        #puts [errored].inspect if errored.length > 0
       end
 
       return nil
     end
 
     def stop(*args)
-      puts args.inspect
+      #puts args.inspect
       return "rstop"
     end
 
@@ -334,24 +335,24 @@ module Bespoked
     end
 
     def tcp(*args)
-      puts args.inspect
+      #puts args.inspect
       new_io = Tcp.new(*args)
       self.ios << new_io
       new_io
     end
 
     def next_tick(*args)
-      puts [:rntic, args].inspect
+      #puts [:rntic, args].inspect
       yield
     end
 
     def work(*args)
-      puts [:rwork, args].inspect
+      #puts [:rwork, args].inspect
       yield
     end
 
     def finally(*args)
-      puts [:finally, args].inspect
+      #puts [:finally, args].inspect
       Then.new(*args)
     end
   end

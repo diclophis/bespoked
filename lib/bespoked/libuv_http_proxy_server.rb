@@ -27,6 +27,9 @@ module Bespoked
       end
 
       @server.bind(options[:BindAddress], options[:Port].to_i) do |client|
+        client.finally do
+          record :info, :ingressed_client_finally, [client].inspect
+        end
         handle_client(client)
       end
 
@@ -65,7 +68,7 @@ module Bespoked
     def record(level = nil, name = nil, message = nil)
       if @logger
         log_event = {:date => Time.now, :level => level, :name => name, :message => message}
-        @logger.notify(log_event)
+        #@logger.notify(log_event)
       end
     end
 
@@ -73,8 +76,8 @@ module Bespoked
       @shutdown_promises[client] ||= begin
         timer = @run_loop.timer
         timer.progress do
-          #record :debug, :timer_closed, [].inspect
-          client.close
+          record :debug, :install_shutdown_promise_timer, [client].inspect
+          #client.shutdown
           @shutdown_promises[client] = nil
         end
         timer
@@ -120,6 +123,8 @@ module Bespoked
       port = nil
 
       http_parser.on_headers_complete = proc do
+        record :debug, :on_headers_complete, [].inspect
+
         handled = false
 
         reading_state = :request_to_upstream
@@ -134,13 +139,17 @@ module Bespoked
         end
 
         do_recon = proc {
-          record :debug, :do_recon_call, [recon_timer].inspect
+          #record :debug, :do_recon_call, [recon_timer].inspect
           recon_timer.start(1000, 0)
+
+          tried = nil
+          found = nil
 
           if env["HTTP_HOST"]
             url = nil
             in_url = URI.parse("http://" + env["HTTP_HOST"])
 
+            tried = in_url.host
             service_host, ip_address = @proxy_controller.vhosts[in_url.host]
 
             if service_host && ip_address
@@ -148,6 +157,8 @@ module Bespoked
             end
 
             record :debug, :up_up_up, [@proxy_controller.vhosts.keys, in_url.host, service_host, ip_address, url]
+
+            found = url
 
             if url
               host = "%s" % [url.host] # ".default.svc.cluster.local"] # pedantic?
@@ -162,7 +173,7 @@ module Bespoked
             end
           else
             recon_timer.stop
-            halt_connection(client, 404, [:no_service_found, @proxy_controller.vhosts.keys])
+            halt_connection(client, 404, [:no_service_found, @proxy_controller.vhosts.keys, tried, found, env])
           end
         }
 
@@ -250,7 +261,7 @@ module Bespoked
           ###install_shutdown_promise(client).notify
         }.catch { |e|
           #TODO?
-          #record :info, :pther_catch, [e]
+          record :info, :pther_catch, [e]
           #should_close = e.is_a?(Libuv::Error::ECANCELED)
           #record :info, :proxy_write_error, [e, should_close].inspect
           #client.close if should_close
@@ -275,16 +286,17 @@ module Bespoked
 
     def do_new_thing(host, http_parser, client, new_client, body_left_over, recon_timer, halt_timer)
       proc {
-        record :debug, :connected_upstream, [host].inspect
+        #record :debug, :connected_upstream, [host].inspect
         recon_timer.stop
         halt_timer.stop
         sp = install_shutdown_promise(client)
         sp.stop
 
         new_client.finally do |err|
+          record :debug, :upstream_client_finally, [host].inspect
           sp = install_shutdown_promise(client)
           sp.stop
-          sp.start(1000, 0)
+          sp.start(100, 0)
         end
 
         new_client.progress do |chunk|
