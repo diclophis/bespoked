@@ -33,7 +33,7 @@ GEM
     concurrent-ruby (1.0.5)
     faraday (0.12.1)
       multipart-post (>= 1.2, < 3)
-    ffi (1.9.18)
+    ffi (1.11.2)
     ffi-compiler (1.0.1)
       ffi (>= 1.0.0)
       rake
