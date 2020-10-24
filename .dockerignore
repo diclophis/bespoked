@@ -1,0 +1,9 @@
+manifest.rb
+Dockerfile.bespoked
+Makefile
+manifest.rb
+kubernetes
+build
+test
+vendor
+.bundle
