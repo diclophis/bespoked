@@ -152,8 +152,9 @@ class Kube
               paths = http["paths"]
               paths.each { |path|
                 backend = path["backend"]
-                service_name = backend["serviceName"]
-                service_port = backend["servicePort"]
+                service = backend["service"]
+                service_name = service["name"]
+                service_port = service["port"]
 
                 if @services && found_service = @services[service_name]
                   type = found_service["type"]
@@ -161,7 +162,7 @@ class Kube
                   case type
                     when "NodePort"
                       node_port = found_service["ports"].detect { |port|
-                        port["port"] == service_port
+                        port["port"] == service_port["number"]
                       }
 
                       upstream_map += "upstream #{service_name} {\n  server 127.0.0.1:#{node_port["nodePort"]} fail_timeout=0;\n}\n"
