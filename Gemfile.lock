@@ -1,12 +1,14 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    msgpack (1.5.1)
     yajl-ruby (1.4.1)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
+  msgpack
   yajl-ruby
 
 BUNDLED WITH
