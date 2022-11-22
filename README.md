@@ -1,4 +1,4 @@
-# bespoked - A Ruby Kubernetes resource streaming api
+# bespoked - A Ruby/Kube resource stream api
 
 ![bespoked](images/bespoked.png)
 
