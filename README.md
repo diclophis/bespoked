@@ -6,7 +6,7 @@
 
 The `simple-watch-export-nginx-conf-controller.rb` file contains an example implementation of watching several resources, combined, make up a rudimentary ingress controller
 
-```
+```ruby
 client = Bespoked.new
 
 client.watch!("pods", "services", "ingresses")
@@ -20,7 +20,7 @@ end
 
 To run, install as start as follows ...
 
-```
+```shell
 bundle install --path=vendor/bundle
 sudo cp nginx/empty.nginx.conf /etc/nginx/nginx.conf
 sudo ruby simple-watch-export-nginx-conf-controller.rb
