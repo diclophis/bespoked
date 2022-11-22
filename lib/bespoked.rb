@@ -27,6 +27,7 @@ class Bespoked
         status = description["status"]
 
         #NOTE: this is resolution of pod state algorithm
+        #TODO: handle more resolution states for various kinds
         if status
           phase = status["phase"]
           if conditions = status["conditions"]
@@ -142,10 +143,7 @@ class Bespoked
         end
 
         if a.nil? && @changed
-
           block.call(@pods, @services, @ingresses)
-
-
 
           @changed = false
         end

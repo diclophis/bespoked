@@ -58,15 +58,6 @@ client.ingest! do |pods, services, ingresses|
     }
   }
 
-  #puts :upstream_map
-  #puts upstream_map
-  #puts
-  #puts :host_to_app_map
-  #puts host_to_app_map
-  #puts
-  #puts :app_to_alias
-  #puts app_to_alias_map
-
   confd_dir = ENV["MOCK_CONFD_DIR"] || "/etc/nginx/conf.d"
 
   File.open("#{confd_dir}/hosts_app.conf", "w+") { |f|
