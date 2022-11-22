@@ -34,7 +34,6 @@ client.ingest! do |pods, services, ingresses|
 
               puts service_name
 
-              #upstream_map += "upstream #{service_name} {\n  server 127.0.0.1:#{node_port["nodePort"]} fail_timeout=0;\n}\n"
               upstream_map += "upstream #{service_name} {\n"
               2.times do |i|
                 upstream_map += "  server 127.0.0.1:#{node_port["nodePort"]} fail_timeout=0 #{i > 0 ? "backup" : ""};\n"
@@ -59,29 +58,34 @@ client.ingest! do |pods, services, ingresses|
     }
   }
 
-  puts upstream_map
-  puts host_to_app_map
-  puts app_to_alias_map
+  #puts :upstream_map
+  #puts upstream_map
+  #puts
+  #puts :host_to_app_map
+  #puts host_to_app_map
+  #puts
+  #puts :app_to_alias
+  #puts app_to_alias_map
 
-  #confd_dir = ENV["MOCK_CONFD_DIR"] || "/etc/nginx/conf.d"
+  confd_dir = ENV["MOCK_CONFD_DIR"] || "/etc/nginx/conf.d"
 
-  #File.open("#{confd_dir}/hosts_app.conf", "w+") { |f|
-  #  f.write(upstream_map)
-  #}
+  File.open("#{confd_dir}/hosts_app.conf", "w+") { |f|
+    f.write(upstream_map)
+  }
 
-  #File.open("#{confd_dir}/hosts_app.map", "w+") { |f|
-  #  f.write(host_to_app_map)
-  #}
+  File.open("#{confd_dir}/hosts_app.map", "w+") { |f|
+    f.write(host_to_app_map)
+  }
 
-  #File.open("#{confd_dir}/hosts_app_alias.map", "w+") {|f|
-  #  f.write(app_to_alias_map)
-  #}
+  File.open("#{confd_dir}/hosts_app_alias.map", "w+") {|f|
+    f.write(app_to_alias_map)
+  }
 
-  #unless system("sudo", "systemctl", "reload", "nginx.service")
-  #  $stderr.write("bad nginx conf\n")
-  #  exit(1)
-  #end
+  unless system("sudo", "systemctl", "reload", "nginx.service")
+    $stderr.write("bad nginx conf\n")
+    exit(1)
+  end
 
-  #$stdout.write("updated vhost table\n")
-  #$stdout.flush
+  $stdout.write("updated vhost table\n")
+  $stdout.flush
 end
